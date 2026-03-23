@@ -51,6 +51,31 @@ def build_pattern(words: list[str]) -> re.Pattern:
     return re.compile(r"(?<![a-zA-Z])(" + "|".join(escaped) + r")(?![a-zA-Z])", re.IGNORECASE)
 
 
+MEDIA_EXTENSIONS = watcher.MEDIA_EXTENSIONS
+
+
+async def _scan_existing(watch_folder: str, queue: asyncio.Queue) -> None:
+    """Queue media files already in *watch_folder* that have no DB record yet."""
+    existing = await db.list_jobs(DB_PATH)
+    processed = {j["file_path"] for j in existing}
+
+    found = 0
+    for path in Path(watch_folder).rglob("*"):
+        if path.suffix.lower() not in MEDIA_EXTENSIONS:
+            continue
+        if path.name.startswith("tmp"):
+            continue
+        str_path = str(path)
+        if str_path not in processed:
+            queue.put_nowait(str_path)
+            found += 1
+
+    if found:
+        logger.info("Startup scan: queued %d unprocessed file(s).", found)
+    else:
+        logger.info("Startup scan: all files already processed.")
+
+
 # ---------------------------------------------------------------------------
 # App state
 # ---------------------------------------------------------------------------
@@ -96,6 +121,9 @@ async def lifespan(app: FastAPI):
         logger.info("Re-enqueueing %d stale job(s).", len(stale_paths))
         for path in stale_paths:
             queue.put_nowait(path)
+
+    # 8. Scan watch folder for existing files that have never been processed
+    await _scan_existing(WATCH_FOLDER, queue)
 
     _state.update(
         queue=queue,

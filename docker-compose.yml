@@ -22,6 +22,9 @@ services:
       BADWORDS_PATH: /app/badwords.txt
       FFMPEG_BIN: ffmpeg
       MUTE_PADDING: "0.1"
+    # Run as the same UID:GID as your Plex media files so FFmpeg can write them.
+    # Check with: stat /mnt/plex/Plex | grep Uid
+    user: "1000:1000"
     ports:
       # Access the API at http://<homelab-ip>:8765
       - "8765:8000"
