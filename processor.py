@@ -78,7 +78,13 @@ def mute_file(
                     f"FFmpeg failed:\n{result2.stderr[-1000:]}"
                 )
 
-        os.replace(tmp_path, input_path)
+        # os.replace() can fail on Windows if the destination is locked.
+        # Fall back to: delete original, then rename temp into place.
+        try:
+            os.replace(tmp_path, input_path)
+        except PermissionError:
+            os.unlink(input_path)
+            os.rename(tmp_path, input_path)
         logger.info("Muted %s successfully.", input_path)
 
     except Exception:

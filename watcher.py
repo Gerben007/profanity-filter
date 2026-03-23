@@ -32,7 +32,11 @@ class _MediaEventHandler(FileSystemEventHandler):
             self._handle(event.src_path)
 
     def _handle(self, path: str) -> None:
-        if Path(path).suffix.lower() not in MEDIA_EXTENSIONS:
+        p = Path(path)
+        if p.suffix.lower() not in MEDIA_EXTENSIONS:
+            return
+        # Ignore temp files written by processor.py (e.g. tmp7vzn_88h.mkv)
+        if p.name.startswith("tmp"):
             return
         with self._lock:
             if path in self._seen:
