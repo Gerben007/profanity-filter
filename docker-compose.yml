@@ -1,11 +1,5 @@
 services:
   profanity-filter:
-    build:
-      context: .
-      args:
-        # Change to "small", "medium", or "large-v2" for better accuracy
-        # (increases build time and image size)
-        WHISPER_MODEL: base
     image: profanity-filter:latest
     restart: unless-stopped
     volumes:
