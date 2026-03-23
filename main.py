@@ -77,22 +77,25 @@ async def lifespan(app: FastAPI):
     pattern = build_pattern(words)
     logger.info("Loaded %d bad words.", len(words))
 
-    # 4. Job queue + worker
+    # 4. Job queue
     queue: asyncio.Queue = asyncio.Queue()
+
+    # 5. Start watchdog first so watch_handler exists before the worker starts
+    loop = asyncio.get_running_loop()
+    observer, watch_handler = watcher.start_watcher(WATCH_FOLDER, loop, queue)
+
+    # 6. Worker (passes mark_processed so it suppresses re-watch after muting)
     worker_task = asyncio.create_task(
-        worker.run_worker(queue, DB_PATH, model, pattern, MUTE_PADDING, FFMPEG_BIN)
+        worker.run_worker(queue, DB_PATH, model, pattern, MUTE_PADDING, FFMPEG_BIN,
+                          mark_processed=watch_handler.mark_processed)
     )
 
-    # 5. Recover jobs that were processing when the service last crashed
+    # 7. Recover jobs that were processing when the service last crashed
     stale_paths = await db.recover_stale_jobs(DB_PATH)
     if stale_paths:
         logger.info("Re-enqueueing %d stale job(s).", len(stale_paths))
         for path in stale_paths:
             queue.put_nowait(path)
-
-    # 6. Start watchdog
-    loop = asyncio.get_running_loop()
-    observer = watcher.start_watcher(WATCH_FOLDER, loop, queue)
 
     _state.update(
         queue=queue,

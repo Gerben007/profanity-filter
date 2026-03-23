@@ -18,6 +18,7 @@ async def run_worker(
     pattern: re.Pattern,
     padding: float = 0.1,
     ffmpeg_bin: str = "ffmpeg",
+    mark_processed=None,  # optional callable(path) to suppress re-watch
 ) -> None:
     """
     Single async worker that consumes (file_path, job_id | None) tuples from
@@ -63,6 +64,8 @@ async def run_worker(
                 db_path, job_id, status="done", matches=matches, segments=segments
             )
             logger.info("Job %s done (%d match(es)).", job_id, len(matches))
+            if mark_processed:
+                mark_processed(file_path)
 
         except asyncio.CancelledError:
             await db.update_job(

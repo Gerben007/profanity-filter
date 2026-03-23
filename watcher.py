@@ -23,6 +23,12 @@ class _MediaEventHandler(FileSystemEventHandler):
         self._seen: set[str] = set()
         self._lock = threading.Lock()
 
+    def mark_processed(self, path: str) -> None:
+        """Call after a file is processed so the watcher ignores the
+        modification event caused by FFmpeg replacing the file in-place."""
+        with self._lock:
+            self._seen.add(path)
+
     def on_created(self, event: FileCreatedEvent) -> None:
         if not event.is_directory:
             self._handle(event.src_path)
@@ -87,10 +93,10 @@ def start_watcher(
     watch_folder: str,
     loop: asyncio.AbstractEventLoop,
     queue: asyncio.Queue,
-) -> Observer:
+) -> tuple[Observer, _MediaEventHandler]:
     handler = _MediaEventHandler(loop, queue)
     observer = Observer()
     observer.schedule(handler, watch_folder, recursive=True)
     observer.start()
     logger.info("Watching folder: %s", watch_folder)
-    return observer
+    return observer, handler
