@@ -3,6 +3,7 @@ FROM python:3.11-slim
 # Install FFmpeg
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
+    gosu \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -28,4 +29,8 @@ ENV WHISPER_MODEL=base \
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Run entrypoint as root so it can fix /data ownership, then drops to uid 1000
+ENTRYPOINT ["/entrypoint.sh"]
