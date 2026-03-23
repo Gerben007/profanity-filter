@@ -11,7 +11,7 @@ services:
     volumes:
       # Mount your Plex media folder here.
       # The path inside the container must match WATCH_FOLDER below.
-      - /path/to/plex/media:/media
+      - /mnt/plex/Plex:/media
       # Persistent storage for the SQLite DB and Whisper model cache
       - profanity_data:/data
     environment:
