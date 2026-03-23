@@ -11,22 +11,20 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Pre-download the Whisper model at build time so the container starts offline.
-# Override the model size with --build-arg WHISPER_MODEL=small (or medium, large-v2, etc.)
-ARG WHISPER_MODEL=base
-RUN python -c "from faster_whisper import WhisperModel; WhisperModel('${WHISPER_MODEL}', device='cpu', compute_type='int8')"
-
 # Copy application source
 COPY . .
 
 # Runtime environment defaults (all overridable in docker-compose)
+# HF_HOME points to the persistent volume so the Whisper model is downloaded
+# once on first start and cached across container restarts/recreates.
 ENV WHISPER_MODEL=base \
     WHISPER_DEVICE=cpu \
     WATCH_FOLDER=/media \
     DB_PATH=/data/jobs.db \
     BADWORDS_PATH=/app/badwords.txt \
     FFMPEG_BIN=ffmpeg \
-    MUTE_PADDING=0.1
+    MUTE_PADDING=0.1 \
+    HF_HOME=/data/models
 
 EXPOSE 8000
 
