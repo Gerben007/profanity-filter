@@ -1,0 +1,44 @@
+services:
+  profanity-filter:
+    build:
+      context: .
+      args:
+        # Change to "small", "medium", or "large-v2" for better accuracy
+        # (increases build time and image size)
+        WHISPER_MODEL: base
+    image: profanity-filter:latest
+    restart: unless-stopped
+    volumes:
+      # Mount your Plex media folder here.
+      # The path inside the container must match WATCH_FOLDER below.
+      - /path/to/plex/media:/media
+      # Persistent storage for the SQLite DB and Whisper model cache
+      - profanity_data:/data
+    environment:
+      WHISPER_MODEL: base
+      WHISPER_DEVICE: cpu
+      WATCH_FOLDER: /media
+      DB_PATH: /data/jobs.db
+      BADWORDS_PATH: /app/badwords.txt
+      FFMPEG_BIN: ffmpeg
+      MUTE_PADDING: "0.1"
+    ports:
+      # Access the API at http://<homelab-ip>:8765
+      - "8765:8000"
+
+    # --- GPU passthrough (NVIDIA) ---
+    # Uncomment the block below and rebuild with Dockerfile.gpu if you have a GPU.
+    # Using a GPU cuts transcription time by 5-10x.
+    #
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    # environment:
+    #   WHISPER_DEVICE: cuda
+
+volumes:
+  profanity_data:

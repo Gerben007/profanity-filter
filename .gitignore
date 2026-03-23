@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Runtime data
+*.db
+*.db-shm
+*.db-wal
+
+# Whisper / HuggingFace model cache
+.cache/
+models/
+
+# Docker
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
