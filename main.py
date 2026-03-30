@@ -67,8 +67,8 @@ MEDIA_EXTENSIONS = watcher.MEDIA_EXTENSIONS
 
 async def _scan_existing(watch_folder: str, queue: asyncio.Queue) -> None:
     """Queue media files already in *watch_folder* that have no DB record yet."""
-    existing = await db.list_jobs(DB_PATH)
-    processed = {j["file_path"] for j in existing}
+    existing = await db.list_jobs(DB_PATH, limit=100_000)
+    processed = {j["file_path"] for j in existing["items"]}
 
     found = 0
     for path in Path(watch_folder).rglob("*"):
@@ -134,11 +134,11 @@ async def lifespan(app: FastAPI):
     )
 
     # 7. Recover jobs that were processing when the service last crashed
-    stale_paths = await db.recover_stale_jobs(DB_PATH)
-    if stale_paths:
-        logger.info("Re-enqueueing %d stale job(s).", len(stale_paths))
-        for path in stale_paths:
-            _enqueue(queue, 1, path, None)
+    stale_jobs = await db.recover_stale_jobs(DB_PATH)
+    if stale_jobs:
+        logger.info("Re-enqueueing %d stale job(s).", len(stale_jobs))
+        for j in stale_jobs:
+            _enqueue(queue, j["priority"], j["file_path"], j["job_id"])
 
     # 8. Scan watch folder for existing files that have never been processed
     await _scan_existing(WATCH_FOLDER, queue)
@@ -238,8 +238,8 @@ async def health():
 
 
 @app.get("/jobs")
-async def list_jobs(status: str | None = None):
-    return await db.list_jobs(DB_PATH, status=status)
+async def list_jobs(status: str | None = None, offset: int = 0):
+    return await db.list_jobs(DB_PATH, limit=100, offset=offset, status=status)
 
 
 @app.get("/jobs/queue-positions")
@@ -282,8 +282,8 @@ async def submit_folder(body: FolderRequest):
     if not folder.is_dir():
         raise HTTPException(status_code=400, detail=f"Not a directory: {body.folder_path}")
 
-    existing = await db.list_jobs(DB_PATH, limit=10000)
-    already_queued = {j["file_path"] for j in existing if j["status"] in ("pending", "processing", "done")}
+    existing = await db.list_jobs(DB_PATH, limit=100_000)
+    already_queued = {j["file_path"] for j in existing["items"] if j["status"] in ("pending", "processing", "done")}
 
     queue: asyncio.PriorityQueue = _state["queue"]
     queued = []

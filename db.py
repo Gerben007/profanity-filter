@@ -112,22 +112,46 @@ async def get_job(db_path: str, job_id: str) -> dict | None:
     return _deserialize(dict(row))
 
 
-async def list_jobs(db_path: str, limit: int = 200, status: str | None = None) -> list[dict]:
+async def list_jobs(
+    db_path: str,
+    limit: int = 100,
+    offset: int = 0,
+    status: str | None = None,
+) -> dict:
+    """Returns {items, total, limit, offset}."""
     async with _connect(db_path) as conn:
         conn.row_factory = aiosqlite.Row
+
         if status in ("pending", "processing"):
-            # Order by what's next in the priority queue
-            sql = "SELECT * FROM jobs WHERE status=? ORDER BY priority ASC, created_at ASC LIMIT ?"
-            params = (status, limit)
+            where = "WHERE status=?"
+            order = "ORDER BY COALESCE(priority,1) ASC, created_at ASC"
+            count_params = (status,)
+            data_params  = (status, limit, offset)
         elif status:
-            sql = "SELECT * FROM jobs WHERE status=? ORDER BY created_at DESC LIMIT ?"
-            params = (status, limit)
+            where = "WHERE status=?"
+            order = "ORDER BY created_at DESC"
+            count_params = (status,)
+            data_params  = (status, limit, offset)
         else:
-            sql = "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?"
-            params = (limit,)
-        async with conn.execute(sql, params) as cur:
+            where = ""
+            order = "ORDER BY created_at DESC"
+            count_params = ()
+            data_params  = (limit, offset)
+
+        async with conn.execute(f"SELECT COUNT(*) FROM jobs {where}", count_params) as cur:
+            total = (await cur.fetchone())[0]
+
+        async with conn.execute(
+            f"SELECT * FROM jobs {where} {order} LIMIT ? OFFSET ?", data_params
+        ) as cur:
             rows = await cur.fetchall()
-    return [_deserialize(dict(r)) for r in rows]
+
+    return {
+        "items":  [_deserialize(dict(r)) for r in rows],
+        "total":  total,
+        "limit":  limit,
+        "offset": offset,
+    }
 
 
 async def get_queue_positions(db_path: str) -> dict[str, int]:
@@ -135,7 +159,7 @@ async def get_queue_positions(db_path: str) -> dict[str, int]:
     async with _connect(db_path) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            "SELECT job_id FROM jobs WHERE status='pending' ORDER BY priority ASC, created_at ASC"
+            "SELECT job_id FROM jobs WHERE status='pending' ORDER BY COALESCE(priority,1) ASC, created_at ASC"
         ) as cur:
             rows = await cur.fetchall()
     return {dict(r)["job_id"]: i + 1 for i, r in enumerate(rows)}
@@ -148,12 +172,13 @@ async def delete_job(db_path: str, job_id: str) -> bool:
     return cur.rowcount > 0
 
 
-async def recover_stale_jobs(db_path: str) -> list[str]:
-    """Reset jobs stuck in 'processing' from a previous run and return their file paths."""
+async def recover_stale_jobs(db_path: str) -> list[dict]:
+    """Reset jobs stuck in 'processing' from a previous run.
+    Returns list of {job_id, file_path, priority} so callers can re-enqueue correctly."""
     async with _connect(db_path) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
-            "SELECT job_id, file_path FROM jobs WHERE status='processing'"
+            "SELECT job_id, file_path, COALESCE(priority, 1) as priority FROM jobs WHERE status='processing'"
         ) as cur:
             stale = await cur.fetchall()
         if stale:
@@ -162,4 +187,4 @@ async def recover_stale_jobs(db_path: str) -> list[str]:
                 (_now(),),
             )
             await conn.commit()
-    return [dict(r)["file_path"] for r in stale]
+    return [dict(r) for r in stale]

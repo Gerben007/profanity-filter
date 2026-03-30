@@ -28,7 +28,7 @@
   <!-- Page tabs -->
   <nav class="bg-slate-800 border-b border-slate-700 px-4 flex gap-5">
     <button onclick="showPage('jobs')"  id="tab-jobs"  class="tab-active  py-2.5 text-sm font-medium transition tap-target">Jobs</button>
-    <button onclick="showPage('words')" id="tab-words" class="tab-inactive py-2.5 text-sm font-medium transition tap-target">Bad Words</button>
+    <button onclick="showPage('words')" id="tab-words" class="tab-inactive py-2.5 text-sm font-medium transition tap-target">Filtered Words</button>
   </nav>
 
   <main class="max-w-5xl mx-auto px-3 py-4 space-y-4">
@@ -77,7 +77,7 @@
     <div id="page-words" class="hidden space-y-4">
 
       <section class="bg-slate-800 rounded-xl p-4 border border-slate-700">
-        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Add Word / Phrase</h2>
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Add Filtered Word / Phrase</h2>
         <div class="flex gap-2">
           <input id="new-word" type="text" placeholder="e.g. damn  or  oh my god"
             class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2.5 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
@@ -91,7 +91,7 @@
       <section class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
         <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-700 gap-2">
           <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider shrink-0">
-            Words <span id="word-count" class="text-slate-500 font-normal"></span>
+            Filtered Words / Phrases <span id="word-count" class="text-slate-500 font-normal"></span>
           </h2>
           <input id="word-search" type="search" placeholder="Filter…"
             class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-full max-w-[160px]"
@@ -138,6 +138,8 @@ let pollTimer = null;
 let jobFilter = 'all';
 let allWords = [];
 let queuePositions = {};
+let currentPage = 0;
+const PAGE_SIZE = 100;
 
 // ── Page navigation ───────────────────────────────────────────────────────────
 function showPage(name) {
@@ -169,6 +171,7 @@ async function loadHealth() {
 // ── Jobs ──────────────────────────────────────────────────────────────────────
 function setJobFilter(f) {
   jobFilter = f;
+  currentPage = 0;
   ['all','queued','done','failed'].forEach(k => {
     document.getElementById(`jf-${k}`).className =
       `text-xs font-medium py-1 tap-target transition ${k === f ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'}`;
@@ -177,32 +180,31 @@ function setJobFilter(f) {
 }
 
 async function loadJobs() {
+  const offset = currentPage * PAGE_SIZE;
   try {
-    let jobs = [];
+    let jobs = [], total = 0;
     queuePositions = {};
 
     if (jobFilter === 'queued') {
       const [pendingRes, processingRes, posRes] = await Promise.all([
-        fetch(`${BASE}/jobs?status=pending`),
-        fetch(`${BASE}/jobs?status=processing`),
+        fetch(`${BASE}/jobs?status=pending&offset=${offset}`),
+        fetch(`${BASE}/jobs?status=processing&offset=0`),
         fetch(`${BASE}/jobs/queue-positions`),
       ]);
-      const pending    = pendingRes.ok    ? await pendingRes.json()    : [];
-      const processing = processingRes.ok ? await processingRes.json() : [];
-      jobs = [...processing, ...pending];
+      const pendingData    = pendingRes.ok    ? await pendingRes.json()    : {items:[], total:0};
+      const processingData = processingRes.ok ? await processingRes.json() : {items:[], total:0};
+      jobs  = [...processingData.items, ...pendingData.items];
+      total = processingData.total + pendingData.total;
       queuePositions = posRes.ok ? await posRes.json() : {};
-    } else if (jobFilter === 'done') {
-      const r = await fetch(`${BASE}/jobs?status=done`);
-      jobs = r.ok ? await r.json() : [];
-    } else if (jobFilter === 'failed') {
-      const r = await fetch(`${BASE}/jobs?status=failed`);
-      jobs = r.ok ? await r.json() : [];
     } else {
-      const r = await fetch(`${BASE}/jobs`);
-      jobs = r.ok ? await r.json() : [];
+      const statusParam = jobFilter !== 'all' ? `&status=${jobFilter}` : '';
+      const r = await fetch(`${BASE}/jobs?offset=${offset}${statusParam}`);
+      const data = r.ok ? await r.json() : {items:[], total:0};
+      jobs  = data.items;
+      total = data.total;
     }
 
-    renderJobs(jobs);
+    renderJobs(jobs, total);
     scheduleJobPoll(jobs);
   } catch {
     document.getElementById('job-list-wrap').innerHTML =
@@ -217,7 +219,7 @@ function scheduleJobPoll(jobs) {
   pollTimer = setTimeout(loadJobs, isProcessing ? 4000 : hasPending ? 15000 : 30000);
 }
 
-function renderJobs(jobs) {
+function renderJobs(jobs, total = 0) {
   const wrap = document.getElementById('job-list-wrap');
   if (!jobs.length) {
     wrap.innerHTML = '<p class="px-4 py-8 text-center text-slate-500 text-sm">No jobs</p>';
@@ -225,15 +227,36 @@ function renderJobs(jobs) {
   }
 
   const isMobile = window.innerWidth < 640;
-  if (isMobile) {
-    renderJobCards(jobs, wrap);
-  } else {
-    renderJobTable(jobs, wrap);
-  }
+  const listHtml = isMobile ? jobCardsHtml(jobs) : jobTableHtml(jobs);
+  const pageHtml = paginationHtml(total);
+  wrap.innerHTML = listHtml + pageHtml;
 }
 
-function renderJobCards(jobs, wrap) {
-  wrap.innerHTML = `<div class="divide-y divide-slate-700/50">${jobs.map(j => {
+function paginationHtml(total) {
+  if (total <= PAGE_SIZE) return '';
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+  const page = currentPage;
+  const start = page * PAGE_SIZE + 1;
+  const end   = Math.min((page + 1) * PAGE_SIZE, total);
+  return `<div class="flex items-center justify-between px-4 py-2.5 border-t border-slate-700 text-xs text-slate-400">
+    <span>${start}–${end} of ${total}</span>
+    <div class="flex gap-2">
+      <button onclick="changePage(-1)" ${page === 0 ? 'disabled' : ''}
+        class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-default transition tap-target">&#8592; Prev</button>
+      <button onclick="changePage(1)" ${page >= totalPages - 1 ? 'disabled' : ''}
+        class="px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 disabled:opacity-30 disabled:cursor-default transition tap-target">Next &#8594;</button>
+    </div>
+  </div>`;
+}
+
+function changePage(dir) {
+  currentPage = Math.max(0, currentPage + dir);
+  clearTimeout(pollTimer);
+  loadJobs();
+}
+
+function jobCardsHtml(jobs) {
+  return `<div class="divide-y divide-slate-700/50">${jobs.map(j => {
     const isSelected = j.job_id === selectedJobId;
     const pos = queuePositions[j.job_id];
     const badge = statusBadge(j.status, j.priority, pos);
@@ -257,8 +280,8 @@ function renderJobCards(jobs, wrap) {
   }).join('')}</div>`;
 }
 
-function renderJobTable(jobs, wrap) {
-  wrap.innerHTML = `<div class="overflow-x-auto">
+function jobTableHtml(jobs) {
+  return `<div class="overflow-x-auto">
     <table class="w-full text-sm">
       <thead>
         <tr class="text-slate-500 text-xs uppercase border-b border-slate-700">
@@ -293,7 +316,8 @@ function renderJobTable(jobs, wrap) {
 }
 
 // Re-render on resize so we switch card↔table layout
-window.addEventListener('resize', () => { if (pollTimer) loadJobs(); });
+let resizeTimer;
+window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(loadJobs, 200); });
 
 function statusBadge(status, priority, queuePos) {
   const map = {
@@ -375,10 +399,7 @@ function renderDetail(job) {
       <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Detected Words (${matches.length})</h3>
       ${matchHtml}
     </div>
-    ${segments.length ? `<div class="mt-3">
-      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Muted Segments</h3>
-      ${segHtml}
-    </div>` : ''}`;
+    `;
 }
 
 function closeDetail() {
