@@ -157,6 +157,37 @@ async def ui():
     return FileResponse(str(_static_dir / "index.html"))
 
 
+@app.get("/browse")
+async def browse(path: str = "/media"):
+    """List directory contents for the file browser UI."""
+    target = Path(path).resolve()
+    # Safety: only allow browsing under WATCH_FOLDER or /media
+    watch_root = Path(WATCH_FOLDER).resolve()
+    if target != watch_root and watch_root not in target.parents and target not in watch_root.parents:
+        raise HTTPException(status_code=403, detail="Path outside allowed root")
+    if not target.exists():
+        raise HTTPException(status_code=404, detail="Path not found")
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="Not a directory")
+
+    entries = []
+    for entry in sorted(target.iterdir(), key=lambda e: (e.is_file(), e.name.lower())):
+        if entry.name.startswith(".") or entry.name.startswith("tmp"):
+            continue
+        entries.append({
+            "name": entry.name,
+            "path": str(entry),
+            "is_dir": entry.is_dir(),
+            "is_media": entry.is_file() and entry.suffix.lower() in MEDIA_EXTENSIONS,
+        })
+
+    return {
+        "current": str(target),
+        "parent": str(target.parent) if target != watch_root else None,
+        "entries": entries,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Request / response models
 # ---------------------------------------------------------------------------
@@ -232,3 +263,46 @@ async def delete_job(job_id: str):
     deleted = await db.delete_job(DB_PATH, job_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Job not found")
+
+
+# ---------------------------------------------------------------------------
+# Bad-words management
+# ---------------------------------------------------------------------------
+
+@app.get("/words")
+async def list_words():
+    return {"words": sorted(_state.get("words", []))}
+
+
+class WordsRequest(BaseModel):
+    words: list[str]
+
+
+def _save_words(words: list[str]) -> None:
+    Path(BADWORDS_PATH).write_text(
+        "\n".join(sorted(set(words), key=str.lower)) + "\n", encoding="utf-8"
+    )
+
+
+@app.post("/words", status_code=201)
+async def add_words(body: WordsRequest):
+    current = list(_state.get("words", []))
+    new_entries = [w.strip().lower() for w in body.words if w.strip()]
+    merged = list(set(current) | set(new_entries))
+    _save_words(merged)
+    pattern = build_pattern(merged)
+    _state["words"] = merged
+    _state["pattern"] = pattern
+    return {"word_count": len(merged)}
+
+
+@app.delete("/words", status_code=200)
+async def remove_words(body: WordsRequest):
+    current = set(_state.get("words", []))
+    to_remove = {w.strip().lower() for w in body.words if w.strip()}
+    updated = list(current - to_remove)
+    _save_words(updated)
+    pattern = build_pattern(updated)
+    _state["words"] = updated
+    _state["pattern"] = pattern
+    return {"word_count": len(updated)}

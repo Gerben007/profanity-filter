@@ -9,6 +9,8 @@
     body { background: #0f172a; }
     .mono { font-family: ui-monospace, monospace; }
     tr.selected { background: #1e3a5f !important; }
+    .tab-active { border-bottom: 2px solid #3b82f6; color: #e2e8f0; }
+    .tab-inactive { border-bottom: 2px solid transparent; color: #64748b; }
   </style>
 </head>
 <body class="text-slate-200 min-h-screen">
@@ -18,68 +20,142 @@
     <h1 class="text-lg font-semibold tracking-wide">Profanity Filter</h1>
     <div class="flex items-center gap-3">
       <span id="health-chip" class="text-xs px-3 py-1 rounded-full bg-slate-700 text-slate-400 mono">loading…</span>
-      <button onclick="reloadWords()" class="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 transition">Reload Words</button>
     </div>
   </header>
 
+  <!-- Nav tabs -->
+  <nav class="bg-slate-800 border-b border-slate-700 px-6 flex gap-6">
+    <button onclick="showPage('jobs')" id="tab-jobs" class="tab-active py-2.5 text-sm font-medium transition">Jobs</button>
+    <button onclick="showPage('words')" id="tab-words" class="tab-inactive py-2.5 text-sm font-medium transition">Bad Words</button>
+  </nav>
+
   <main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
 
-    <!-- Submit job -->
-    <section class="bg-slate-800 rounded-xl p-5 border border-slate-700">
-      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Submit Job</h2>
-      <div class="flex gap-2">
-        <input id="file-path" type="text" placeholder="/media/video.mp4"
-          class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
-          onkeydown="if(event.key==='Enter') submitJob()" />
-        <button onclick="submitJob()"
-          class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition">
-          Process
-        </button>
-      </div>
-      <p id="submit-msg" class="text-xs mt-2 h-4"></p>
-    </section>
+    <!-- ═══════════════ JOBS PAGE ═══════════════ -->
+    <div id="page-jobs">
 
-    <!-- Job list -->
-    <section class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700">
-        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Jobs</h2>
-        <button onclick="loadJobs()" class="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 transition">Refresh</button>
-      </div>
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead>
-            <tr class="text-slate-500 text-xs uppercase border-b border-slate-700">
-              <th class="px-4 py-2 text-left w-28">Status</th>
-              <th class="px-4 py-2 text-left">File</th>
-              <th class="px-4 py-2 text-right w-20">Matches</th>
-              <th class="px-4 py-2 text-right w-32">Updated</th>
-              <th class="px-4 py-2 w-10"></th>
-            </tr>
-          </thead>
-          <tbody id="job-tbody">
-            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+      <!-- Submit job -->
+      <section class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Submit Job</h2>
+        <div class="flex gap-2">
+          <input id="file-path" type="text" placeholder="Click Browse or type a path…"
+            class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 cursor-pointer"
+            readonly onclick="openBrowser()" />
+          <button onclick="openBrowser()"
+            class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm transition">Browse</button>
+          <button onclick="submitJob()"
+            class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition">Process</button>
+        </div>
+        <p id="submit-msg" class="text-xs mt-2 h-4"></p>
+      </section>
 
-    <!-- Detail panel -->
-    <section id="detail-panel" class="hidden bg-slate-800 rounded-xl border border-slate-700 p-5">
-      <div class="flex items-center justify-between mb-4">
-        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Job Detail</h2>
-        <button onclick="closeDetail()" class="text-slate-500 hover:text-slate-300 text-lg leading-none">&times;</button>
-      </div>
-      <div id="detail-content"></div>
-    </section>
+      <!-- Job list -->
+      <section class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700">
+          <div class="flex gap-4">
+            <button onclick="setJobFilter('all')"    id="jf-all"        class="text-xs font-medium py-1 transition">All</button>
+            <button onclick="setJobFilter('queued')" id="jf-queued"     class="text-xs font-medium py-1 transition">Queued</button>
+            <button onclick="setJobFilter('done')"   id="jf-done"       class="text-xs font-medium py-1 transition">Done</button>
+            <button onclick="setJobFilter('failed')" id="jf-failed"     class="text-xs font-medium py-1 transition">Failed</button>
+          </div>
+          <button onclick="loadJobs()" class="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 transition">Refresh</button>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="text-slate-500 text-xs uppercase border-b border-slate-700">
+                <th class="px-4 py-2 text-left w-28">Status</th>
+                <th class="px-4 py-2 text-left">File</th>
+                <th class="px-4 py-2 text-right w-20">Matches</th>
+                <th class="px-4 py-2 text-right w-32">Updated</th>
+                <th class="px-4 py-2 w-10"></th>
+              </tr>
+            </thead>
+            <tbody id="job-tbody">
+              <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Detail panel -->
+      <section id="detail-panel" class="hidden bg-slate-800 rounded-xl border border-slate-700 p-5">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Job Detail</h2>
+          <button onclick="closeDetail()" class="text-slate-500 hover:text-slate-300 text-lg leading-none">&times;</button>
+        </div>
+        <div id="detail-content"></div>
+      </section>
+
+    </div><!-- /page-jobs -->
+
+    <!-- ═══════════════ WORDS PAGE ═══════════════ -->
+    <div id="page-words" class="hidden space-y-5">
+
+      <!-- Add word -->
+      <section class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Add Words / Phrases</h2>
+        <div class="flex gap-2">
+          <input id="new-word" type="text" placeholder="e.g. damn  or  oh my god"
+            class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            onkeydown="if(event.key==='Enter') addWord()" />
+          <button onclick="addWord()"
+            class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition">Add</button>
+        </div>
+        <p id="words-msg" class="text-xs mt-2 h-4"></p>
+      </section>
+
+      <!-- Word list -->
+      <section class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700">
+          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">
+            Word List <span id="word-count" class="text-slate-500 font-normal"></span>
+          </h2>
+          <input id="word-search" type="text" placeholder="Filter…"
+            class="bg-slate-900 border border-slate-600 rounded px-3 py-1 text-xs mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-40"
+            oninput="filterWords()" />
+        </div>
+        <div id="word-list" class="max-h-[60vh] overflow-y-auto divide-y divide-slate-700/40">
+          <p class="px-5 py-4 text-slate-500 text-sm">Loading…</p>
+        </div>
+      </section>
+
+    </div><!-- /page-words -->
 
   </main>
+
+  <!-- File browser modal -->
+  <div id="browser-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+    <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700 shrink-0">
+        <h2 class="text-sm font-semibold text-slate-300">Browse Files</h2>
+        <button onclick="closeBrowser()" class="text-slate-500 hover:text-slate-300 text-xl leading-none">&times;</button>
+      </div>
+      <div id="browser-path" class="px-5 py-2 text-xs mono text-slate-400 bg-slate-900/50 border-b border-slate-700 shrink-0 truncate"></div>
+      <div id="browser-list" class="overflow-y-auto flex-1 divide-y divide-slate-700/50">
+        <p class="px-5 py-4 text-slate-500 text-sm">Loading…</p>
+      </div>
+    </div>
+  </div>
 
 <script>
 const BASE = '';
 let selectedJobId = null;
 let pollTimer = null;
+let jobFilter = 'all';
+let allWords = [];
 
-// ── Health ──────────────────────────────────────────────────────────────────
+// ── Page navigation ───────────────────────────────────────────────────────────
+function showPage(name) {
+  ['jobs', 'words'].forEach(p => {
+    document.getElementById(`page-${p}`).classList.toggle('hidden', p !== name);
+    document.getElementById(`tab-${p}`).className =
+      `py-2.5 text-sm font-medium transition ${p === name ? 'tab-active' : 'tab-inactive'}`;
+  });
+  if (name === 'words') loadWords();
+}
+
+// ── Health ────────────────────────────────────────────────────────────────────
 async function loadHealth() {
   try {
     const r = await fetch(`${BASE}/health`);
@@ -95,17 +171,34 @@ async function loadHealth() {
   }
 }
 
-// ── Jobs ────────────────────────────────────────────────────────────────────
+// ── Jobs ──────────────────────────────────────────────────────────────────────
+function setJobFilter(f) {
+  jobFilter = f;
+  ['all','queued','done','failed'].forEach(k => {
+    document.getElementById(`jf-${k}`).className =
+      `text-xs font-medium py-1 transition ${k === f ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'}`;
+  });
+  loadJobs();
+}
+
 async function loadJobs() {
   try {
     const r = await fetch(`${BASE}/jobs`);
     const jobs = await r.json();
-    renderJobs(jobs);
+    const filtered = filterByTab(jobs);
+    renderJobs(filtered);
     scheduleJobPoll(jobs);
   } catch {
     document.getElementById('job-tbody').innerHTML =
       '<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">Failed to load jobs</td></tr>';
   }
+}
+
+function filterByTab(jobs) {
+  if (jobFilter === 'queued') return jobs.filter(j => j.status === 'pending' || j.status === 'processing');
+  if (jobFilter === 'done')   return jobs.filter(j => j.status === 'done');
+  if (jobFilter === 'failed') return jobs.filter(j => j.status === 'failed');
+  return jobs;
 }
 
 function scheduleJobPoll(jobs) {
@@ -117,7 +210,7 @@ function scheduleJobPoll(jobs) {
 function renderJobs(jobs) {
   const tbody = document.getElementById('job-tbody');
   if (!jobs.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No jobs yet</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No jobs</td></tr>';
     return;
   }
   tbody.innerHTML = jobs.map(j => {
@@ -129,7 +222,7 @@ function renderJobs(jobs) {
     return `<tr class="border-b border-slate-700/50 hover:bg-slate-700/40 cursor-pointer transition ${isSelected ? 'selected' : ''}"
                onclick="showDetail('${j.job_id}')">
       <td class="px-4 py-2">${badge}</td>
-      <td class="px-4 py-2 mono text-xs text-slate-300 max-w-xs truncate" title="${j.file_path}">${file}</td>
+      <td class="px-4 py-2 mono text-xs text-slate-300 max-w-xs truncate" title="${escHtml(j.file_path)}">${escHtml(file)}</td>
       <td class="px-4 py-2 text-right mono text-slate-400">${matches}</td>
       <td class="px-4 py-2 text-right text-slate-500 text-xs">${time}</td>
       <td class="px-4 py-2 text-center">
@@ -162,10 +255,9 @@ function relativeTime(iso) {
   return `${Math.round(diff / 3600)}h ago`;
 }
 
-// ── Detail ───────────────────────────────────────────────────────────────────
+// ── Detail ────────────────────────────────────────────────────────────────────
 async function showDetail(jobId) {
   selectedJobId = jobId;
-  // Refresh row highlighting
   document.querySelectorAll('#job-tbody tr').forEach(tr => tr.classList.remove('selected'));
   event.currentTarget && event.currentTarget.classList.add('selected');
 
@@ -176,9 +268,8 @@ async function showDetail(jobId) {
 
   try {
     const r = await fetch(`${BASE}/jobs/${jobId}`);
-    if (!r.ok) throw new Error('Not found');
-    const job = await r.json();
-    renderDetail(job);
+    if (!r.ok) throw new Error();
+    renderDetail(await r.json());
   } catch {
     content.innerHTML = '<p class="text-red-400 text-sm">Failed to load job detail.</p>';
   }
@@ -189,28 +280,22 @@ function renderDetail(job) {
   const segments = job.segments ? JSON.parse(job.segments) : [];
 
   const matchHtml = matches.length
-    ? `<div class="space-y-1">
-        ${matches.map(m => `
-          <div class="flex items-center gap-3 text-xs mono bg-slate-900 rounded px-3 py-1.5">
-            <span class="text-red-400 font-semibold">${escHtml(m.word)}</span>
-            <span class="text-slate-500">matched</span>
-            <span class="text-slate-300">"${escHtml(m.raw)}"</span>
-            <span class="ml-auto text-slate-500">${fmtTime(m.start)} – ${fmtTime(m.end)}</span>
-          </div>`).join('')}
-      </div>`
+    ? `<div class="space-y-1">${matches.map(m => `
+        <div class="flex items-center gap-3 text-xs mono bg-slate-900 rounded px-3 py-1.5">
+          <span class="text-red-400 font-semibold">${escHtml(m.word)}</span>
+          <span class="text-slate-500">matched</span>
+          <span class="text-slate-300">"${escHtml(m.raw)}"</span>
+          <span class="ml-auto text-slate-500">${fmtTime(m.start)} – ${fmtTime(m.end)}</span>
+        </div>`).join('')}</div>`
     : '<p class="text-slate-500 text-sm">No matches found.</p>';
 
   const segHtml = segments.length
-    ? `<div class="flex flex-wrap gap-2 mt-2">
-        ${segments.map(s =>
-          `<span class="text-xs mono bg-slate-900 px-2 py-1 rounded text-slate-300">[${s[0].toFixed(2)}s – ${s[1].toFixed(2)}s]</span>`
-        ).join('')}
-      </div>`
-    : '';
+    ? `<div class="flex flex-wrap gap-2 mt-2">${segments.map(s =>
+        `<span class="text-xs mono bg-slate-900 px-2 py-1 rounded text-slate-300">[${s[0].toFixed(2)}s – ${s[1].toFixed(2)}s]</span>`
+      ).join('')}</div>` : '';
 
   const errorHtml = job.error_msg
-    ? `<div class="mt-4 bg-red-950 border border-red-800 rounded p-3 text-sm text-red-300 mono">${escHtml(job.error_msg)}</div>`
-    : '';
+    ? `<div class="mt-4 bg-red-950 border border-red-800 rounded p-3 text-sm text-red-300 mono">${escHtml(job.error_msg)}</div>` : '';
 
   document.getElementById('detail-content').innerHTML = `
     <div class="mb-3">
@@ -227,8 +312,7 @@ function renderDetail(job) {
     ${segments.length ? `<div class="mt-4">
       <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Muted Segments</h3>
       ${segHtml}
-    </div>` : ''}
-  `;
+    </div>` : ''}`;
 }
 
 function closeDetail() {
@@ -237,12 +321,12 @@ function closeDetail() {
   document.querySelectorAll('#job-tbody tr').forEach(tr => tr.classList.remove('selected'));
 }
 
-// ── Submit ───────────────────────────────────────────────────────────────────
+// ── Submit ────────────────────────────────────────────────────────────────────
 async function submitJob() {
   const input = document.getElementById('file-path');
   const msg = document.getElementById('submit-msg');
   const path = input.value.trim();
-  if (!path) return;
+  if (!path) { openBrowser(); return; }
 
   msg.textContent = 'Submitting…';
   msg.className = 'text-xs mt-2 h-4 text-slate-400';
@@ -255,7 +339,7 @@ async function submitJob() {
     });
     const d = await r.json();
     if (!r.ok) {
-      msg.textContent = d.detail || 'Error submitting job';
+      msg.textContent = d.detail || 'Error';
       msg.className = 'text-xs mt-2 h-4 text-red-400';
     } else {
       msg.textContent = `Queued: ${d.job_id}`;
@@ -269,7 +353,7 @@ async function submitJob() {
   }
 }
 
-// ── Delete ───────────────────────────────────────────────────────────────────
+// ── Delete job ────────────────────────────────────────────────────────────────
 async function deleteJob(jobId) {
   if (!confirm('Delete this job record?')) return;
   await fetch(`${BASE}/jobs/${jobId}`, { method: 'DELETE' });
@@ -277,15 +361,113 @@ async function deleteJob(jobId) {
   await loadJobs();
 }
 
-// ── Reload words ──────────────────────────────────────────────────────────────
-async function reloadWords() {
+// ── File browser ──────────────────────────────────────────────────────────────
+async function openBrowser() {
+  document.getElementById('browser-modal').classList.remove('hidden');
+  await browseTo('/media');
+}
+function closeBrowser() {
+  document.getElementById('browser-modal').classList.add('hidden');
+}
+async function browseTo(path) {
+  const list = document.getElementById('browser-list');
+  const pathEl = document.getElementById('browser-path');
+  list.innerHTML = '<p class="px-5 py-4 text-slate-500 text-sm">Loading…</p>';
   try {
-    const r = await fetch(`${BASE}/reload`, { method: 'POST' });
+    const r = await fetch(`${BASE}/browse?path=${encodeURIComponent(path)}`);
+    if (!r.ok) { const d = await r.json(); list.innerHTML = `<p class="px-5 py-4 text-red-400 text-sm">${escHtml(d.detail||'Error')}</p>`; return; }
+    const data = await r.json();
+    pathEl.textContent = data.current;
+    let html = '';
+    if (data.parent) html += `<div class="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-700/50 cursor-pointer transition" onclick="browseTo('${escAttr(data.parent)}')"><span class="text-slate-400">&#8593;</span><span class="text-sm text-slate-400">..</span></div>`;
+    if (!data.entries.length) html += '<p class="px-5 py-4 text-slate-500 text-sm">Empty folder</p>';
+    for (const e of data.entries) {
+      if (e.is_dir) {
+        html += `<div class="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-700/50 cursor-pointer transition" onclick="browseTo('${escAttr(e.path)}')"><span class="text-blue-400">&#128193;</span><span class="text-sm">${escHtml(e.name)}</span></div>`;
+      } else if (e.is_media) {
+        html += `<div class="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-700/50 cursor-pointer transition" onclick="selectFile('${escAttr(e.path)}')"><span class="text-emerald-400">&#127909;</span><span class="text-sm">${escHtml(e.name)}</span><span class="ml-auto text-xs text-emerald-600">select</span></div>`;
+      } else {
+        html += `<div class="flex items-center gap-3 px-5 py-2.5 opacity-40 cursor-default"><span class="text-slate-500">&#128196;</span><span class="text-sm text-slate-400">${escHtml(e.name)}</span></div>`;
+      }
+    }
+    list.innerHTML = html;
+  } catch { list.innerHTML = '<p class="px-5 py-4 text-red-400 text-sm">Failed to load directory</p>'; }
+}
+function selectFile(path) {
+  document.getElementById('file-path').value = path;
+  closeBrowser();
+}
+document.getElementById('browser-modal').addEventListener('click', function(e) { if (e.target === this) closeBrowser(); });
+
+// ── Bad words ─────────────────────────────────────────────────────────────────
+async function loadWords() {
+  document.getElementById('word-list').innerHTML = '<p class="px-5 py-4 text-slate-500 text-sm">Loading…</p>';
+  try {
+    const r = await fetch(`${BASE}/words`);
     const d = await r.json();
-    alert(`Word list reloaded: ${d.word_count} words`);
+    allWords = d.words;
+    renderWords(allWords);
+  } catch {
+    document.getElementById('word-list').innerHTML = '<p class="px-5 py-4 text-red-400 text-sm">Failed to load words</p>';
+  }
+}
+
+function filterWords() {
+  const q = document.getElementById('word-search').value.toLowerCase();
+  renderWords(q ? allWords.filter(w => w.includes(q)) : allWords);
+}
+
+function renderWords(words) {
+  document.getElementById('word-count').textContent = `(${words.length})`;
+  if (!words.length) {
+    document.getElementById('word-list').innerHTML = '<p class="px-5 py-4 text-slate-500 text-sm">No words found</p>';
+    return;
+  }
+  document.getElementById('word-list').innerHTML = words.map(w =>
+    `<div class="flex items-center justify-between px-5 py-2 hover:bg-slate-700/30 group">
+      <span class="mono text-sm text-slate-300">${escHtml(w)}</span>
+      <button onclick="removeWord('${escAttr(w)}')"
+        class="text-slate-700 group-hover:text-red-400 transition text-base leading-none" title="Remove">&times;</button>
+    </div>`
+  ).join('');
+}
+
+async function addWord() {
+  const input = document.getElementById('new-word');
+  const msg = document.getElementById('words-msg');
+  const word = input.value.trim();
+  if (!word) return;
+
+  try {
+    const r = await fetch(`${BASE}/words`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ words: [word] }),
+    });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.detail);
+    msg.textContent = `Added. Total: ${d.word_count} words.`;
+    msg.className = 'text-xs mt-2 h-4 text-emerald-400';
+    input.value = '';
+    await loadWords();
+    loadHealth();
+  } catch (e) {
+    msg.textContent = e.message || 'Error';
+    msg.className = 'text-xs mt-2 h-4 text-red-400';
+  }
+}
+
+async function removeWord(word) {
+  try {
+    await fetch(`${BASE}/words`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ words: [word] }),
+    });
+    await loadWords();
     loadHealth();
   } catch {
-    alert('Failed to reload word list');
+    alert('Failed to remove word');
   }
 }
 
@@ -296,16 +478,15 @@ function fmtTime(secs) {
   const s = (secs % 60).toFixed(1).padStart(4, '0');
   return `${m}:${s}`;
 }
-
 function escHtml(str) {
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function escAttr(str) {
+  return String(str).replace(/'/g,"\\'").replace(/"/g,'&quot;');
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────────
+setJobFilter('all');
 loadHealth();
 loadJobs();
 setInterval(loadHealth, 10000);
