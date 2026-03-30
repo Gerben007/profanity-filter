@@ -6,8 +6,8 @@ from faster_whisper import WhisperModel
 
 @dataclass
 class WordHit:
-    word: str    # cleaned word that matched the bad-words pattern
-    raw: str     # original word token from Whisper (may include punctuation)
+    word: str    # cleaned phrase/word that matched the bad-words pattern
+    raw: str     # original token(s) from Whisper (may include punctuation)
     start: float # seconds into the media file
     end: float   # seconds into the media file
 
@@ -34,6 +34,9 @@ def merge_segments(
 
 _CLEAN_RE = re.compile(r"[^a-zA-Z']")
 
+# Longest possible phrase in the bad-words list (e.g. "for the love of god" = 5)
+_MAX_PHRASE_WORDS = 5
+
 
 def transcribe(
     model: WhisperModel,
@@ -42,8 +45,11 @@ def transcribe(
     padding: float = 0.1,
 ) -> tuple[list[WordHit], list[tuple[float, float]]]:
     """
-    Transcribe *file_path* and return every word that matches *pattern*,
+    Transcribe *file_path* and return every word/phrase that matches *pattern*,
     together with the merged mute segments (padded by *padding* seconds).
+
+    Uses a sliding window so multi-word phrases (e.g. "oh my god") are caught
+    in addition to single bad words.
     """
     segments_gen, _info = model.transcribe(
         file_path,
@@ -51,28 +57,35 @@ def transcribe(
         language="en",
     )
 
-    hits: list[WordHit] = []
-    raw_segments: list[tuple[float, float]] = []
-
-    # Fully consume the generator — faster-whisper is lazy
+    # Collect all words as (cleaned_text, raw_text, start, end)
+    all_words: list[tuple[str, str, float, float]] = []
     for segment in list(segments_gen):
         if segment.words is None:
             continue
         for word_obj in segment.words:
             cleaned = _CLEAN_RE.sub("", word_obj.word).lower()
-            if not cleaned:
-                continue
-            if pattern.fullmatch(cleaned):
-                hits.append(
-                    WordHit(
-                        word=cleaned,
-                        raw=word_obj.word,
-                        start=word_obj.start,
-                        end=word_obj.end,
-                    )
-                )
-                raw_segments.append(
-                    (max(0.0, word_obj.start - padding), word_obj.end + padding)
-                )
+            if cleaned:
+                all_words.append((cleaned, word_obj.word, word_obj.start, word_obj.end))
+
+    hits: list[WordHit] = []
+    raw_segments: list[tuple[float, float]] = []
+    skip_until: int = 0  # index: skip words already consumed by a phrase match
+
+    for i in range(len(all_words)):
+        if i < skip_until:
+            continue
+
+        # Try longest windows first so phrases take priority over single words
+        max_n = min(_MAX_PHRASE_WORDS, len(all_words) - i)
+        for n in range(max_n, 0, -1):
+            phrase = " ".join(w for w, _, _, _ in all_words[i:i + n])
+            if pattern.fullmatch(phrase):
+                start = all_words[i][2]
+                end = all_words[i + n - 1][3]
+                raw = " ".join(r for _, r, _, _ in all_words[i:i + n])
+                hits.append(WordHit(word=phrase, raw=raw, start=start, end=end))
+                raw_segments.append((max(0.0, start - padding), end + padding))
+                skip_until = i + n  # don't re-match words inside this phrase
+                break
 
     return hits, merge_segments(raw_segments)

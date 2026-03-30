@@ -109,7 +109,10 @@ catshit
 catshits
 chickenshit
 chickenshits
+christ almighty
 christ|moses
+for christ's sake
+for the love of christ
 clit
 clitface
 clitfuck
@@ -207,6 +210,9 @@ dammit|dangit
 damned|danged
 damnit|dangit
 damn|dang
+dear god
+dear jesus
+dear lord
 dickbag
 dickbeaters
 dickbrain
@@ -276,6 +282,8 @@ facefucker
 facefuckers
 fag
 fagbag
+for god's sake
+for the love of god
 fagfucker
 faggit
 faggot
@@ -458,6 +466,15 @@ gayfuckist
 gaylord
 gaytard
 gaywad
+geez
+god
+god almighty
+god's sake
+good god
+good heavens
+good lord
+golly
+gosh
 getthefuckout
 God damn
 god damned
@@ -479,6 +496,12 @@ godshit
 godshits
 handjob
 handjobs
+heavens above
+holy cow
+holy crap
+holy hell
+holy moly
+holy smokes
 hardon
 headfuck
 headfucks
@@ -501,12 +524,18 @@ jackass|jerk
 jackoff
 jackoffs
 jerk off
+jeez
+jesus christ
+jesus h christ
 jesus|moses
 jigaboo
 jizz
 joyshit
 joyshits
 kickass
+lord
+lord almighty
+lord have mercy
 kick-ass
 kitchenshit
 kitchenshits
@@ -524,6 +553,8 @@ mindfucking
 mindfuckings
 mindfucks
 minge
+my god
+my lord
 monsterfucker
 monsterfuckers
 mothafuck
@@ -571,7 +602,10 @@ nunfuckers
 nut sack
 nutsack
 oh god
+oh jesus
+oh lord
 oh my god
+oh my lord
 oh-my-god
 ohfuck
 ohgod
@@ -583,6 +617,7 @@ oldfuckers
 oldfucks
 omigod
 omygod
+omg
 overfuckingjoyed
 papeshit
 papeshits
@@ -690,6 +725,9 @@ shittings
 shitty
 shit|poop
 skank
+so help me god
+swear to god
+sweet jesus
 skullfuck
 slut
 slutbag
@@ -710,6 +748,7 @@ sweetfucker
 sweetfuckers
 tard
 testicle
+thank god
 thefuck
 thundercunt
 tit
