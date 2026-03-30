@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import re
+from typing import Callable
 
 from faster_whisper import WhisperModel
 
@@ -19,6 +20,7 @@ async def run_worker(
     padding: float = 0.1,
     ffmpeg_bin: str = "ffmpeg",
     mark_processed=None,  # optional callable(path) to suppress re-watch
+    get_words: Callable[[], list[str]] | None = None,  # returns current global word list
 ) -> None:
     """
     Single async worker that consumes (file_path, job_id | None) tuples from
@@ -40,10 +42,25 @@ async def run_worker(
 
         logger.info("Processing: %s", file_path)
 
+        # Fetch current job state to check for skip and ignored_words
+        existing = await db.get_job(db_path, job_id) if job_id else None
+        if existing and existing.get("status") == "skipped":
+            logger.info("Skipping already-skipped job %s", job_id)
+            queue.task_done()
+            continue
+
         if job_id is None:
             job_id = await db.create_job(db_path, file_path)
         await db.update_job(db_path, job_id, status="processing")
         await db.update_progress(db_path, job_id, 0)
+
+        # Build per-job pattern: subtract any ignored words from the global list
+        ignored = (existing or {}).get("ignored_words") or []
+        if ignored and get_words is not None:
+            effective_words = [w for w in get_words() if w not in ignored]
+            job_pattern = transcriber.build_pattern(effective_words) if effective_words else pattern
+        else:
+            job_pattern = pattern
 
         loop = asyncio.get_running_loop()
 
@@ -54,7 +71,7 @@ async def run_worker(
 
         try:
             hits, segments = await asyncio.to_thread(
-                transcriber.transcribe, model, file_path, pattern, padding,
+                transcriber.transcribe, model, file_path, job_pattern, padding,
                 progress_cb,
             )
             logger.info(

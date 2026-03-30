@@ -1,7 +1,13 @@
 import re
 from dataclasses import dataclass
+from typing import Iterable
 
 from faster_whisper import WhisperModel
+
+
+def build_pattern(words: Iterable[str]) -> re.Pattern:
+    escaped = [re.escape(w) for w in words]
+    return re.compile(r"(?<![a-zA-Z])(" + "|".join(escaped) + r")(?![a-zA-Z])", re.IGNORECASE)
 
 
 @dataclass

@@ -46,6 +46,10 @@ async def init_db(db_path: str) -> None:
             await conn.execute("ALTER TABLE jobs ADD COLUMN progress INTEGER NOT NULL DEFAULT 0")
         except Exception:
             pass  # column already exists
+        try:
+            await conn.execute("ALTER TABLE jobs ADD COLUMN ignored_words TEXT")
+        except Exception:
+            pass  # column already exists
         await conn.commit()
 
 
@@ -99,6 +103,8 @@ def _deserialize(row: dict) -> dict:
     for key in ("matches", "segments"):
         if row.get(key):
             row[key] = json.loads(row[key])
+    if row.get("ignored_words"):
+        row["ignored_words"] = json.loads(row["ignored_words"])
     return row
 
 
@@ -163,6 +169,31 @@ async def get_queue_positions(db_path: str) -> dict[str, int]:
         ) as cur:
             rows = await cur.fetchall()
     return {dict(r)["job_id"]: i + 1 for i, r in enumerate(rows)}
+
+
+async def set_ignored_words(db_path: str, job_id: str, words: list[str]) -> bool:
+    """Persist the per-job ignored-words list. Returns False if job not found."""
+    async with _connect(db_path) as conn:
+        cur = await conn.execute(
+            "UPDATE jobs SET ignored_words=?, updated_at=? WHERE job_id=?",
+            (json.dumps(words) if words else None, _now(), job_id),
+        )
+        await conn.commit()
+    return cur.rowcount > 0
+
+
+async def reset_job_for_reprocess(db_path: str, job_id: str) -> bool:
+    """Reset a job to pending so it gets re-transcribed. Keeps ignored_words intact."""
+    async with _connect(db_path) as conn:
+        cur = await conn.execute(
+            """UPDATE jobs
+               SET status='pending', progress=0, matches=NULL, segments=NULL,
+                   error_msg=NULL, updated_at=?
+               WHERE job_id=? AND status != 'processing'""",
+            (_now(), job_id),
+        )
+        await conn.commit()
+    return cur.rowcount > 0
 
 
 async def delete_job(db_path: str, job_id: str) -> bool:

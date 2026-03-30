@@ -1,7 +1,6 @@
 import asyncio
 import logging
 import os
-import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from pydantic import BaseModel
 
 import db
 import transcriber
+from transcriber import build_pattern
 import watcher
 import worker
 
@@ -55,11 +55,6 @@ def load_words(path: str) -> list[str]:
         if word:
             words.append(word)
     return sorted(set(words), key=len, reverse=True)
-
-
-def build_pattern(words: list[str]) -> re.Pattern:
-    escaped = [re.escape(w) for w in words]
-    return re.compile(r"(?<![a-zA-Z])(" + "|".join(escaped) + r")(?![a-zA-Z])", re.IGNORECASE)
 
 
 MEDIA_EXTENSIONS = watcher.MEDIA_EXTENSIONS
@@ -130,7 +125,8 @@ async def lifespan(app: FastAPI):
     # 6. Worker (passes mark_processed so it suppresses re-watch after muting)
     worker_task = asyncio.create_task(
         worker.run_worker(queue, DB_PATH, model, pattern, MUTE_PADDING, FFMPEG_BIN,
-                          mark_processed=watch_handler.mark_processed)
+                          mark_processed=watch_handler.mark_processed,
+                          get_words=lambda: _state.get("words", []))
     )
 
     # 7. Recover jobs that were processing when the service last crashed
@@ -310,6 +306,47 @@ async def reload_badwords():
     _state["pattern"] = pattern
     logger.info("Word list reloaded: %d words.", len(words))
     return ReloadResponse(word_count=len(words))
+
+
+@app.post("/jobs/{job_id}/reprocess", status_code=202)
+async def reprocess_job(job_id: str):
+    job = await db.get_job(DB_PATH, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["status"] == "processing":
+        raise HTTPException(status_code=409, detail="Job is currently processing")
+    reset = await db.reset_job_for_reprocess(DB_PATH, job_id)
+    if not reset:
+        raise HTTPException(status_code=409, detail="Job could not be reset")
+    queue: asyncio.PriorityQueue = _state["queue"]
+    _enqueue(queue, 0, job["file_path"], job_id)
+    return {"job_id": job_id, "status": "pending"}
+
+
+@app.post("/jobs/{job_id}/skip", status_code=204)
+async def skip_job(job_id: str):
+    job = await db.get_job(DB_PATH, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    if job["status"] not in ("pending",):
+        raise HTTPException(status_code=409, detail="Only pending jobs can be skipped")
+    await db.update_job(DB_PATH, job_id, status="skipped")
+
+
+class IgnoredWordsRequest(BaseModel):
+    ignored_words: list[str]
+
+
+@app.put("/jobs/{job_id}/ignored-words", status_code=200)
+async def set_ignored_words(job_id: str, body: IgnoredWordsRequest):
+    job = await db.get_job(DB_PATH, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Job not found")
+    words = [w.strip().lower() for w in body.ignored_words if w.strip()]
+    saved = await db.set_ignored_words(DB_PATH, job_id, words)
+    if not saved:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return {"job_id": job_id, "ignored_words": words}
 
 
 @app.delete("/jobs/{job_id}", status_code=204)
