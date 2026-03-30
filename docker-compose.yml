@@ -1,6 +1,6 @@
 services:
   profanity-filter:
-    image: profanity-filter:latest
+    image: ghcr.io/gerben007/profanity-filter:latest
     restart: unless-stopped
     volumes:
       # Mount your Plex media folder here.
