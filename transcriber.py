@@ -34,8 +34,8 @@ def merge_segments(
 
 _CLEAN_RE = re.compile(r"[^a-zA-Z']")
 
-# Longest possible phrase in the bad-words list (e.g. "for the love of god" = 5)
-_MAX_PHRASE_WORDS = 5
+# Longest possible phrase in the bad-words list (e.g. "as god is my witness" = 6)
+_MAX_PHRASE_WORDS = 6
 
 
 def transcribe(
