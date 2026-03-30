@@ -8,80 +8,74 @@
   <style>
     body { background: #0f172a; }
     .mono { font-family: ui-monospace, monospace; }
-    tr.selected { background: #1e3a5f !important; }
+    .row-selected { background: #1e3a5f !important; }
     .tab-active { border-bottom: 2px solid #3b82f6; color: #e2e8f0; }
     .tab-inactive { border-bottom: 2px solid transparent; color: #64748b; }
+    /* Tappable targets on mobile */
+    @media (max-width: 640px) {
+      .tap-target { min-height: 44px; }
+    }
   </style>
 </head>
 <body class="text-slate-200 min-h-screen">
 
   <!-- Header -->
-  <header class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between">
-    <h1 class="text-lg font-semibold tracking-wide">Profanity Filter</h1>
-    <div class="flex items-center gap-3">
-      <span id="health-chip" class="text-xs px-3 py-1 rounded-full bg-slate-700 text-slate-400 mono">loading…</span>
-    </div>
+  <header class="bg-slate-800 border-b border-slate-700 px-4 py-3 flex items-center justify-between gap-2">
+    <h1 class="text-base font-semibold tracking-wide shrink-0">Profanity Filter</h1>
+    <span id="health-chip" class="text-xs px-2 py-1 rounded-full bg-slate-700 text-slate-400 mono truncate min-w-0">loading…</span>
   </header>
 
-  <!-- Nav tabs -->
-  <nav class="bg-slate-800 border-b border-slate-700 px-6 flex gap-6">
-    <button onclick="showPage('jobs')" id="tab-jobs" class="tab-active py-2.5 text-sm font-medium transition">Jobs</button>
-    <button onclick="showPage('words')" id="tab-words" class="tab-inactive py-2.5 text-sm font-medium transition">Bad Words</button>
+  <!-- Page tabs -->
+  <nav class="bg-slate-800 border-b border-slate-700 px-4 flex gap-5">
+    <button onclick="showPage('jobs')"  id="tab-jobs"  class="tab-active  py-2.5 text-sm font-medium transition tap-target">Jobs</button>
+    <button onclick="showPage('words')" id="tab-words" class="tab-inactive py-2.5 text-sm font-medium transition tap-target">Bad Words</button>
   </nav>
 
-  <main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+  <main class="max-w-5xl mx-auto px-3 py-4 space-y-4">
 
     <!-- ═══════════════ JOBS PAGE ═══════════════ -->
-    <div id="page-jobs">
+    <div id="page-jobs" class="space-y-4">
 
-      <!-- Submit job -->
-      <section class="bg-slate-800 rounded-xl p-5 border border-slate-700">
-        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Submit Job</h2>
-        <div class="flex gap-2">
-          <input id="file-path" type="text" placeholder="Click Browse or type a path…"
-            class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 cursor-pointer"
+      <!-- Submit -->
+      <section class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Submit Job</h2>
+        <!-- Mobile: stack Browse + Process below the path input -->
+        <div class="flex flex-col gap-2 sm:flex-row">
+          <input id="file-path" type="text" placeholder="Tap Browse to pick a file…"
+            class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2.5 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 cursor-pointer"
             readonly onclick="openBrowser()" />
-          <button onclick="openBrowser()"
-            class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm transition">Browse</button>
-          <button onclick="submitJob()"
-            class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition">Process</button>
+          <div class="flex gap-2">
+            <button onclick="openBrowser()"
+              class="flex-1 sm:flex-none px-4 py-2.5 bg-slate-700 hover:bg-slate-600 active:bg-slate-500 rounded text-sm transition tap-target">Browse</button>
+            <button onclick="submitJob()"
+              class="flex-1 sm:flex-none px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-400 rounded text-sm font-medium transition tap-target">Process</button>
+          </div>
         </div>
-        <p id="submit-msg" class="text-xs mt-2 h-4"></p>
+        <p id="submit-msg" class="text-xs mt-2 min-h-[1rem]"></p>
       </section>
 
       <!-- Job list -->
       <section class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700">
-          <div class="flex gap-4">
-            <button onclick="setJobFilter('all')"    id="jf-all"        class="text-xs font-medium py-1 transition">All</button>
-            <button onclick="setJobFilter('queued')" id="jf-queued"     class="text-xs font-medium py-1 transition">Queued</button>
-            <button onclick="setJobFilter('done')"   id="jf-done"       class="text-xs font-medium py-1 transition">Done</button>
-            <button onclick="setJobFilter('failed')" id="jf-failed"     class="text-xs font-medium py-1 transition">Failed</button>
+        <!-- Filter bar -->
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-700">
+          <div class="flex gap-3">
+            <button onclick="setJobFilter('all')"    id="jf-all"    class="text-xs font-medium py-1 tap-target transition">All</button>
+            <button onclick="setJobFilter('queued')" id="jf-queued" class="text-xs font-medium py-1 tap-target transition">Queued</button>
+            <button onclick="setJobFilter('done')"   id="jf-done"   class="text-xs font-medium py-1 tap-target transition">Done</button>
+            <button onclick="setJobFilter('failed')" id="jf-failed" class="text-xs font-medium py-1 tap-target transition">Failed</button>
           </div>
-          <button onclick="loadJobs()" class="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 transition">Refresh</button>
+          <button onclick="loadJobs()" class="text-xs px-3 py-1.5 rounded bg-slate-700 hover:bg-slate-600 transition tap-target">Refresh</button>
         </div>
-        <div class="overflow-x-auto">
-          <table class="w-full text-sm">
-            <thead>
-              <tr class="text-slate-500 text-xs uppercase border-b border-slate-700">
-                <th class="px-4 py-2 text-left w-28">Status</th>
-                <th class="px-4 py-2 text-left">File</th>
-                <th class="px-4 py-2 text-right w-20">Matches</th>
-                <th class="px-4 py-2 text-right w-32">Updated</th>
-              </tr>
-            </thead>
-            <tbody id="job-tbody">
-              <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
-            </tbody>
-          </table>
-        </div>
+
+        <!-- Card list (mobile) / Table (sm+) -->
+        <div id="job-list-wrap"></div>
       </section>
 
       <!-- Detail panel -->
-      <section id="detail-panel" class="hidden bg-slate-800 rounded-xl border border-slate-700 p-5">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Job Detail</h2>
-          <button onclick="closeDetail()" class="text-slate-500 hover:text-slate-300 text-lg leading-none">&times;</button>
+      <section id="detail-panel" class="hidden bg-slate-800 rounded-xl border border-slate-700 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Job Detail</h2>
+          <button onclick="closeDetail()" class="text-slate-500 hover:text-slate-300 text-2xl leading-none tap-target px-1">&times;</button>
         </div>
         <div id="detail-content"></div>
       </section>
@@ -89,29 +83,27 @@
     </div><!-- /page-jobs -->
 
     <!-- ═══════════════ WORDS PAGE ═══════════════ -->
-    <div id="page-words" class="hidden space-y-5">
+    <div id="page-words" class="hidden space-y-4">
 
-      <!-- Add word -->
-      <section class="bg-slate-800 rounded-xl p-5 border border-slate-700">
-        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Add Words / Phrases</h2>
+      <section class="bg-slate-800 rounded-xl p-4 border border-slate-700">
+        <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Add Word / Phrase</h2>
         <div class="flex gap-2">
           <input id="new-word" type="text" placeholder="e.g. damn  or  oh my god"
-            class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+            class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2.5 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
             onkeydown="if(event.key==='Enter') addWord()" />
           <button onclick="addWord()"
-            class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition">Add</button>
+            class="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-400 rounded text-sm font-medium transition tap-target">Add</button>
         </div>
-        <p id="words-msg" class="text-xs mt-2 h-4"></p>
+        <p id="words-msg" class="text-xs mt-2 min-h-[1rem]"></p>
       </section>
 
-      <!-- Word list -->
       <section class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
-        <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700">
-          <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">
-            Word List <span id="word-count" class="text-slate-500 font-normal"></span>
+        <div class="flex items-center justify-between px-4 py-2.5 border-b border-slate-700 gap-2">
+          <h2 class="text-xs font-semibold text-slate-400 uppercase tracking-wider shrink-0">
+            Words <span id="word-count" class="text-slate-500 font-normal"></span>
           </h2>
-          <input id="word-search" type="text" placeholder="Filter…"
-            class="bg-slate-900 border border-slate-600 rounded px-3 py-1 text-xs mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-40"
+          <input id="word-search" type="search" placeholder="Filter…"
+            class="bg-slate-900 border border-slate-600 rounded px-3 py-1.5 text-xs mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500 w-full max-w-[160px]"
             oninput="filterWords()" />
         </div>
         <div id="word-list" class="max-h-[60vh] overflow-y-auto divide-y divide-slate-700/40">
@@ -123,14 +115,14 @@
 
   </main>
 
-  <!-- File browser modal -->
-  <div id="browser-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-    <div class="bg-slate-800 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-      <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700 shrink-0">
+  <!-- File browser modal — full-screen on mobile -->
+  <div id="browser-modal" class="hidden fixed inset-0 bg-black/70 flex items-end sm:items-center justify-center z-50">
+    <div class="bg-slate-800 border border-slate-700 rounded-t-2xl sm:rounded-xl w-full sm:max-w-2xl h-[85vh] sm:max-h-[80vh] flex flex-col">
+      <div class="flex items-center justify-between px-4 py-3 border-b border-slate-700 shrink-0">
         <h2 class="text-sm font-semibold text-slate-300">Browse Files</h2>
-        <button onclick="closeBrowser()" class="text-slate-500 hover:text-slate-300 text-xl leading-none">&times;</button>
+        <button onclick="closeBrowser()" class="text-slate-400 hover:text-slate-200 text-2xl leading-none tap-target px-1">&times;</button>
       </div>
-      <div id="browser-path" class="px-5 py-2 text-xs mono text-slate-400 bg-slate-900/50 border-b border-slate-700 shrink-0 truncate"></div>
+      <div id="browser-path" class="px-4 py-2 text-xs mono text-slate-400 bg-slate-900/50 border-b border-slate-700 shrink-0 truncate"></div>
       <div id="browser-list" class="overflow-y-auto flex-1 divide-y divide-slate-700/50">
         <p class="px-5 py-4 text-slate-500 text-sm">Loading…</p>
       </div>
@@ -143,13 +135,14 @@ let selectedJobId = null;
 let pollTimer = null;
 let jobFilter = 'all';
 let allWords = [];
+let queuePositions = {};
 
 // ── Page navigation ───────────────────────────────────────────────────────────
 function showPage(name) {
   ['jobs', 'words'].forEach(p => {
     document.getElementById(`page-${p}`).classList.toggle('hidden', p !== name);
     document.getElementById(`tab-${p}`).className =
-      `py-2.5 text-sm font-medium transition ${p === name ? 'tab-active' : 'tab-inactive'}`;
+      `py-2.5 text-sm font-medium transition tap-target ${p === name ? 'tab-active' : 'tab-inactive'}`;
   });
   if (name === 'words') loadWords();
 }
@@ -161,12 +154,13 @@ async function loadHealth() {
     const d = await r.json();
     const chip = document.getElementById('health-chip');
     const alive = d.worker_alive;
-    chip.textContent = `${alive ? '✓' : '✗'} Worker  |  Queue: ${d.queue_depth}  |  Words: ${d.word_count}`;
-    chip.className = `text-xs px-3 py-1 rounded-full mono ${alive ? 'bg-emerald-900 text-emerald-300' : 'bg-red-900 text-red-300'}`;
+    // Shorter text on mobile
+    chip.textContent = `${alive ? '✓' : '✗'} Q:${d.queue_depth} W:${d.word_count}`;
+    chip.className = `text-xs px-2 py-1 rounded-full mono truncate ${alive ? 'bg-emerald-900 text-emerald-300' : 'bg-red-900 text-red-300'}`;
   } catch {
     const chip = document.getElementById('health-chip');
-    chip.textContent = 'unreachable';
-    chip.className = 'text-xs px-3 py-1 rounded-full mono bg-red-900 text-red-300';
+    chip.textContent = 'offline';
+    chip.className = 'text-xs px-2 py-1 rounded-full mono bg-red-900 text-red-300';
   }
 }
 
@@ -175,12 +169,10 @@ function setJobFilter(f) {
   jobFilter = f;
   ['all','queued','done','failed'].forEach(k => {
     document.getElementById(`jf-${k}`).className =
-      `text-xs font-medium py-1 transition ${k === f ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'}`;
+      `text-xs font-medium py-1 tap-target transition ${k === f ? 'text-blue-400 border-b-2 border-blue-400' : 'text-slate-500 hover:text-slate-300'}`;
   });
   loadJobs();
 }
-
-let queuePositions = {};
 
 async function loadJobs() {
   try {
@@ -193,7 +185,7 @@ async function loadJobs() {
         fetch(`${BASE}/jobs?status=processing`),
         fetch(`${BASE}/jobs/queue-positions`),
       ]);
-      const pending = pendingRes.ok ? await pendingRes.json() : [];
+      const pending    = pendingRes.ok    ? await pendingRes.json()    : [];
       const processing = processingRes.ok ? await processingRes.json() : [];
       jobs = [...processing, ...pending];
       queuePositions = posRes.ok ? await posRes.json() : {};
@@ -204,7 +196,6 @@ async function loadJobs() {
       const r = await fetch(`${BASE}/jobs?status=failed`);
       jobs = r.ok ? await r.json() : [];
     } else {
-      // All tab: recent 200 jobs only, no queue-positions lookup
       const r = await fetch(`${BASE}/jobs`);
       jobs = r.ok ? await r.json() : [];
     }
@@ -212,8 +203,8 @@ async function loadJobs() {
     renderJobs(jobs);
     scheduleJobPoll(jobs);
   } catch {
-    document.getElementById('job-tbody').innerHTML =
-      '<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">Failed to load jobs</td></tr>';
+    document.getElementById('job-list-wrap').innerHTML =
+      '<p class="px-4 py-6 text-center text-red-400 text-sm">Failed to load jobs</p>';
   }
 }
 
@@ -221,38 +212,86 @@ function scheduleJobPoll(jobs) {
   clearTimeout(pollTimer);
   const isProcessing = jobs.some(j => j.status === 'processing');
   const hasPending   = jobs.some(j => j.status === 'pending');
-  // Poll fast only when something is actively transcoding, slower otherwise
-  const delay = isProcessing ? 4000 : hasPending ? 15000 : 30000;
-  pollTimer = setTimeout(loadJobs, delay);
+  pollTimer = setTimeout(loadJobs, isProcessing ? 4000 : hasPending ? 15000 : 30000);
 }
 
 function renderJobs(jobs) {
-  const tbody = document.getElementById('job-tbody');
+  const wrap = document.getElementById('job-list-wrap');
   if (!jobs.length) {
-    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No jobs</td></tr>';
+    wrap.innerHTML = '<p class="px-4 py-8 text-center text-slate-500 text-sm">No jobs</p>';
     return;
   }
-  tbody.innerHTML = jobs.map(j => {
+
+  const isMobile = window.innerWidth < 640;
+  if (isMobile) {
+    renderJobCards(jobs, wrap);
+  } else {
+    renderJobTable(jobs, wrap);
+  }
+}
+
+function renderJobCards(jobs, wrap) {
+  wrap.innerHTML = `<div class="divide-y divide-slate-700/50">${jobs.map(j => {
     const isSelected = j.job_id === selectedJobId;
     const pos = queuePositions[j.job_id];
     const badge = statusBadge(j.status, j.priority, pos);
     const file = j.file_path.split('/').pop() || j.file_path;
     const matchList = Array.isArray(j.matches) ? j.matches : (j.matches ? JSON.parse(j.matches) : null);
-    const matches = matchList ? matchList.length : (j.status === 'done' ? 0 : '—');
+    const matches = matchList !== null ? matchList.length : (j.status === 'done' ? 0 : null);
     const time = relativeTime(j.updated_at);
     const bar = j.status === 'processing' ? progressBar(j.progress || 0) : '';
-    return `<tr class="border-b border-slate-700/50 hover:bg-slate-700/40 cursor-pointer transition ${isSelected ? 'selected' : ''}"
-               onclick="showDetail('${j.job_id}')">
-      <td class="px-4 py-2">${badge}</td>
-      <td class="px-4 py-2 mono text-xs text-slate-300 max-w-xs">
-        <div class="truncate" title="${escHtml(j.file_path)}">${escHtml(file)}</div>
-        ${bar}
-      </td>
-      <td class="px-4 py-2 text-right mono text-slate-400">${matches}</td>
-      <td class="px-4 py-2 text-right text-slate-500 text-xs">${time}</td>
-    </tr>`;
-  }).join('');
+    return `<div class="px-4 py-3 active:bg-slate-700/50 cursor-pointer ${isSelected ? 'row-selected' : ''}"
+                 onclick="showDetail('${j.job_id}')">
+      <div class="flex items-start justify-between gap-2 mb-1">
+        <div class="text-sm text-slate-200 font-medium leading-snug">${escHtml(file)}</div>
+        <div class="shrink-0 text-xs text-slate-500">${time}</div>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        ${badge}
+        ${matches !== null ? `<span class="text-xs text-slate-500">${matches} match${matches !== 1 ? 'es' : ''}</span>` : ''}
+      </div>
+      ${bar}
+    </div>`;
+  }).join('')}</div>`;
 }
+
+function renderJobTable(jobs, wrap) {
+  wrap.innerHTML = `<div class="overflow-x-auto">
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="text-slate-500 text-xs uppercase border-b border-slate-700">
+          <th class="px-4 py-2 text-left w-36">Status</th>
+          <th class="px-4 py-2 text-left">File</th>
+          <th class="px-4 py-2 text-right w-20">Matches</th>
+          <th class="px-4 py-2 text-right w-28">Updated</th>
+        </tr>
+      </thead>
+      <tbody>${jobs.map(j => {
+        const isSelected = j.job_id === selectedJobId;
+        const pos = queuePositions[j.job_id];
+        const badge = statusBadge(j.status, j.priority, pos);
+        const file = j.file_path.split('/').pop() || j.file_path;
+        const matchList = Array.isArray(j.matches) ? j.matches : (j.matches ? JSON.parse(j.matches) : null);
+        const matches = matchList !== null ? matchList.length : (j.status === 'done' ? 0 : '—');
+        const time = relativeTime(j.updated_at);
+        const bar = j.status === 'processing' ? progressBar(j.progress || 0) : '';
+        return `<tr class="border-b border-slate-700/50 hover:bg-slate-700/40 cursor-pointer transition ${isSelected ? 'row-selected' : ''}"
+                    onclick="showDetail('${j.job_id}')">
+          <td class="px-4 py-2">${badge}</td>
+          <td class="px-4 py-2 mono text-xs text-slate-300">
+            <div class="truncate max-w-xs" title="${escHtml(j.file_path)}">${escHtml(file)}</div>
+            ${bar}
+          </td>
+          <td class="px-4 py-2 text-right mono text-slate-400">${matches}</td>
+          <td class="px-4 py-2 text-right text-slate-500 text-xs">${time}</td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>
+  </div>`;
+}
+
+// Re-render on resize so we switch card↔table layout
+window.addEventListener('resize', () => { if (pollTimer) loadJobs(); });
 
 function statusBadge(status, priority, queuePos) {
   const map = {
@@ -263,22 +302,18 @@ function statusBadge(status, priority, queuePos) {
   };
   const icons = { pending: '⏳', processing: '⟳', done: '✓', failed: '✗' };
   const cls = map[status] || 'bg-slate-700 text-slate-300';
-  let extra = '';
-  if (status === 'pending' && queuePos != null) {
-    extra = `<span class="ml-1 text-slate-400">#${queuePos}</span>`;
-  }
-  if (status === 'pending' && priority === 0) {
-    extra += `<span class="ml-1 px-1 rounded bg-orange-800 text-orange-300 text-xs">HIGH</span>`;
-  }
-  return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cls}">
-    ${icons[status] || ''} ${status}${extra}
-  </span>`;
+  let chips = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cls}">${icons[status] || ''} ${status}</span>`;
+  if (status === 'pending' && priority === 0)
+    chips += `<span class="px-1.5 py-0.5 rounded text-xs font-bold bg-orange-500 text-white">HIGH</span>`;
+  if (status === 'pending' && queuePos != null)
+    chips += `<span class="text-xs text-slate-400 font-mono">#${queuePos}</span>`;
+  return `<span class="inline-flex items-center gap-1.5">${chips}</span>`;
 }
 
 function relativeTime(iso) {
   if (!iso) return '—';
   const diff = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (diff < 60) return `${Math.round(diff)}s ago`;
+  if (diff < 60)   return `${Math.round(diff)}s ago`;
   if (diff < 3600) return `${Math.round(diff / 60)}m ago`;
   return `${Math.round(diff / 3600)}h ago`;
 }
@@ -286,14 +321,12 @@ function relativeTime(iso) {
 // ── Detail ────────────────────────────────────────────────────────────────────
 async function showDetail(jobId) {
   selectedJobId = jobId;
-  document.querySelectorAll('#job-tbody tr').forEach(tr => tr.classList.remove('selected'));
-  event.currentTarget && event.currentTarget.classList.add('selected');
-
   const panel = document.getElementById('detail-panel');
   const content = document.getElementById('detail-content');
   panel.classList.remove('hidden');
+  // Scroll detail into view on mobile
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
   content.innerHTML = '<p class="text-slate-500 text-sm">Loading…</p>';
-
   try {
     const r = await fetch(`${BASE}/jobs/${jobId}`);
     if (!r.ok) throw new Error();
@@ -304,44 +337,45 @@ async function showDetail(jobId) {
 }
 
 function renderDetail(job) {
-  const matches = Array.isArray(job.matches) ? job.matches : (job.matches ? JSON.parse(job.matches) : []);
+  const matches  = Array.isArray(job.matches)  ? job.matches  : (job.matches  ? JSON.parse(job.matches)  : []);
   const segments = Array.isArray(job.segments) ? job.segments : (job.segments ? JSON.parse(job.segments) : []);
 
   const matchHtml = matches.length
     ? `<div class="space-y-1">${matches.map(m => `
-        <div class="flex items-center gap-3 text-xs mono bg-slate-900 rounded px-3 py-1.5">
+        <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs mono bg-slate-900 rounded px-3 py-1.5">
           <span class="text-red-400 font-semibold">${escHtml(m.word)}</span>
-          <span class="text-slate-500">matched</span>
+          <span class="text-slate-500">→</span>
           <span class="text-slate-300">"${escHtml(m.raw)}"</span>
-          <span class="ml-auto text-slate-500">${fmtTime(m.start)} – ${fmtTime(m.end)}</span>
+          <span class="ml-auto text-slate-500 shrink-0">${fmtTime(m.start)} – ${fmtTime(m.end)}</span>
         </div>`).join('')}</div>`
     : '<p class="text-slate-500 text-sm">No matches found.</p>';
 
   const segHtml = segments.length
     ? `<div class="flex flex-wrap gap-2 mt-2">${segments.map(s =>
-        `<span class="text-xs mono bg-slate-900 px-2 py-1 rounded text-slate-300">[${s[0].toFixed(2)}s – ${s[1].toFixed(2)}s]</span>`
+        `<span class="text-xs mono bg-slate-900 px-2 py-1 rounded text-slate-300">[${s[0].toFixed(2)}s–${s[1].toFixed(2)}s]</span>`
       ).join('')}</div>` : '';
 
   const errorHtml = job.error_msg
-    ? `<div class="mt-4 bg-red-950 border border-red-800 rounded p-3 text-sm text-red-300 mono">${escHtml(job.error_msg)}</div>` : '';
+    ? `<div class="mt-3 bg-red-950 border border-red-800 rounded p-3 text-xs text-red-300 mono break-all">${escHtml(job.error_msg)}</div>` : '';
 
   const detailBar = job.status === 'processing'
     ? `<div class="mt-2">${progressBar(job.progress || 0)}</div>` : '';
 
   document.getElementById('detail-content').innerHTML = `
     <div class="mb-3">
-      <p class="text-xs text-slate-500 mono truncate">${escHtml(job.file_path)}</p>
-      <div class="flex items-center gap-3 mt-1">${statusBadge(job.status, job.priority)}
-        <span class="text-xs text-slate-500">ID: <span class="mono">${job.job_id}</span></span>
+      <p class="text-xs text-slate-500 mono break-all">${escHtml(job.file_path)}</p>
+      <div class="flex items-center gap-2 mt-1 flex-wrap">
+        ${statusBadge(job.status, job.priority)}
+        <span class="text-xs text-slate-500 mono">${job.job_id}</span>
       </div>
       ${detailBar}
     </div>
     ${errorHtml}
-    <div class="mt-4">
+    <div class="mt-3">
       <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Detected Words (${matches.length})</h3>
       ${matchHtml}
     </div>
-    ${segments.length ? `<div class="mt-4">
+    ${segments.length ? `<div class="mt-3">
       <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Muted Segments</h3>
       ${segHtml}
     </div>` : ''}`;
@@ -350,18 +384,17 @@ function renderDetail(job) {
 function closeDetail() {
   selectedJobId = null;
   document.getElementById('detail-panel').classList.add('hidden');
-  document.querySelectorAll('#job-tbody tr').forEach(tr => tr.classList.remove('selected'));
 }
 
 // ── Submit ────────────────────────────────────────────────────────────────────
 async function submitJob() {
   const input = document.getElementById('file-path');
-  const msg = document.getElementById('submit-msg');
-  const path = input.value.trim();
+  const msg   = document.getElementById('submit-msg');
+  const path  = input.value.trim();
   if (!path) { openBrowser(); return; }
 
   msg.textContent = 'Submitting…';
-  msg.className = 'text-xs mt-2 h-4 text-slate-400';
+  msg.className = 'text-xs mt-2 text-slate-400';
 
   try {
     const r = await fetch(`${BASE}/jobs`, {
@@ -372,25 +405,17 @@ async function submitJob() {
     const d = await r.json();
     if (!r.ok) {
       msg.textContent = d.detail || 'Error';
-      msg.className = 'text-xs mt-2 h-4 text-red-400';
+      msg.className = 'text-xs mt-2 text-red-400';
     } else {
-      msg.textContent = `Queued: ${d.job_id}`;
-      msg.className = 'text-xs mt-2 h-4 text-emerald-400';
+      msg.textContent = `Queued — processing next`;
+      msg.className = 'text-xs mt-2 text-emerald-400';
       input.value = '';
-      await loadJobs();
+      setJobFilter('queued');
     }
   } catch {
     msg.textContent = 'Network error';
-    msg.className = 'text-xs mt-2 h-4 text-red-400';
+    msg.className = 'text-xs mt-2 text-red-400';
   }
-}
-
-// ── Delete job ────────────────────────────────────────────────────────────────
-async function deleteJob(jobId) {
-  if (!confirm('Delete this job record?')) return;
-  await fetch(`${BASE}/jobs/${jobId}`, { method: 'DELETE' });
-  if (selectedJobId === jobId) closeDetail();
-  await loadJobs();
 }
 
 // ── File browser ──────────────────────────────────────────────────────────────
@@ -402,34 +427,56 @@ function closeBrowser() {
   document.getElementById('browser-modal').classList.add('hidden');
 }
 async function browseTo(path) {
-  const list = document.getElementById('browser-list');
+  const list   = document.getElementById('browser-list');
   const pathEl = document.getElementById('browser-path');
   list.innerHTML = '<p class="px-5 py-4 text-slate-500 text-sm">Loading…</p>';
   try {
     const r = await fetch(`${BASE}/browse?path=${encodeURIComponent(path)}`);
-    if (!r.ok) { const d = await r.json(); list.innerHTML = `<p class="px-5 py-4 text-red-400 text-sm">${escHtml(d.detail||'Error')}</p>`; return; }
+    if (!r.ok) {
+      const d = await r.json();
+      list.innerHTML = `<p class="px-5 py-4 text-red-400 text-sm">${escHtml(d.detail||'Error')}</p>`;
+      return;
+    }
     const data = await r.json();
     pathEl.textContent = data.current;
     let html = '';
-    if (data.parent) html += `<div class="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-700/50 cursor-pointer transition" onclick="browseTo('${escAttr(data.parent)}')"><span class="text-slate-400">&#8593;</span><span class="text-sm text-slate-400">..</span></div>`;
-    if (!data.entries.length) html += '<p class="px-5 py-4 text-slate-500 text-sm">Empty folder</p>';
+    if (data.parent)
+      html += `<div class="flex items-center gap-3 px-4 py-3 hover:bg-slate-700/50 active:bg-slate-700 cursor-pointer transition tap-target" onclick="browseTo('${escAttr(data.parent)}')">
+        <span class="text-slate-400 text-lg">&#8593;</span><span class="text-sm text-slate-400">..</span>
+      </div>`;
+    if (!data.entries.length)
+      html += '<p class="px-5 py-4 text-slate-500 text-sm">Empty folder</p>';
     for (const e of data.entries) {
       if (e.is_dir) {
-        html += `<div class="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-700/50 cursor-pointer transition" onclick="browseTo('${escAttr(e.path)}')"><span class="text-blue-400">&#128193;</span><span class="text-sm">${escHtml(e.name)}</span></div>`;
+        html += `<div class="flex items-center gap-3 px-4 py-3 hover:bg-slate-700/50 active:bg-slate-700 cursor-pointer transition tap-target" onclick="browseTo('${escAttr(e.path)}')">
+          <span class="text-blue-400 text-lg">&#128193;</span>
+          <span class="text-sm">${escHtml(e.name)}</span>
+        </div>`;
       } else if (e.is_media) {
-        html += `<div class="flex items-center gap-3 px-5 py-2.5 hover:bg-slate-700/50 cursor-pointer transition" onclick="selectFile('${escAttr(e.path)}')"><span class="text-emerald-400">&#127909;</span><span class="text-sm">${escHtml(e.name)}</span><span class="ml-auto text-xs text-emerald-600">select</span></div>`;
+        html += `<div class="flex items-center gap-3 px-4 py-3 hover:bg-slate-700/50 active:bg-slate-700 cursor-pointer transition tap-target" onclick="selectFile('${escAttr(e.path)}')">
+          <span class="text-emerald-400 text-lg">&#127909;</span>
+          <span class="text-sm flex-1">${escHtml(e.name)}</span>
+          <span class="text-xs text-emerald-500 shrink-0">Select</span>
+        </div>`;
       } else {
-        html += `<div class="flex items-center gap-3 px-5 py-2.5 opacity-40 cursor-default"><span class="text-slate-500">&#128196;</span><span class="text-sm text-slate-400">${escHtml(e.name)}</span></div>`;
+        html += `<div class="flex items-center gap-3 px-4 py-3 opacity-40 cursor-default">
+          <span class="text-slate-500 text-lg">&#128196;</span>
+          <span class="text-sm text-slate-400">${escHtml(e.name)}</span>
+        </div>`;
       }
     }
     list.innerHTML = html;
-  } catch { list.innerHTML = '<p class="px-5 py-4 text-red-400 text-sm">Failed to load directory</p>'; }
+  } catch {
+    list.innerHTML = '<p class="px-5 py-4 text-red-400 text-sm">Failed to load directory</p>';
+  }
 }
 function selectFile(path) {
   document.getElementById('file-path').value = path;
   closeBrowser();
 }
-document.getElementById('browser-modal').addEventListener('click', function(e) { if (e.target === this) closeBrowser(); });
+document.getElementById('browser-modal').addEventListener('click', function(e) {
+  if (e.target === this) closeBrowser();
+});
 
 // ── Bad words ─────────────────────────────────────────────────────────────────
 async function loadWords() {
@@ -456,20 +503,19 @@ function renderWords(words) {
     return;
   }
   document.getElementById('word-list').innerHTML = words.map(w =>
-    `<div class="flex items-center justify-between px-5 py-2 hover:bg-slate-700/30 group">
+    `<div class="flex items-center justify-between px-4 py-2.5 hover:bg-slate-700/30 group tap-target">
       <span class="mono text-sm text-slate-300">${escHtml(w)}</span>
       <button onclick="removeWord('${escAttr(w)}')"
-        class="text-slate-700 group-hover:text-red-400 transition text-base leading-none" title="Remove">&times;</button>
+        class="text-slate-600 group-hover:text-red-400 active:text-red-300 transition text-xl leading-none tap-target px-1" title="Remove">&times;</button>
     </div>`
   ).join('');
 }
 
 async function addWord() {
   const input = document.getElementById('new-word');
-  const msg = document.getElementById('words-msg');
-  const word = input.value.trim();
+  const msg   = document.getElementById('words-msg');
+  const word  = input.value.trim();
   if (!word) return;
-
   try {
     const r = await fetch(`${BASE}/words`, {
       method: 'POST',
@@ -479,13 +525,13 @@ async function addWord() {
     const d = await r.json();
     if (!r.ok) throw new Error(d.detail);
     msg.textContent = `Added. Total: ${d.word_count} words.`;
-    msg.className = 'text-xs mt-2 h-4 text-emerald-400';
+    msg.className = 'text-xs mt-2 text-emerald-400';
     input.value = '';
     await loadWords();
     loadHealth();
   } catch (e) {
     msg.textContent = e.message || 'Error';
-    msg.className = 'text-xs mt-2 h-4 text-red-400';
+    msg.className = 'text-xs mt-2 text-red-400';
   }
 }
 
@@ -506,7 +552,7 @@ async function removeWord(word) {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function progressBar(pct) {
   const label = pct < 90 ? `Transcribing ${pct}%` : pct < 100 ? `Muting audio…` : `Done`;
-  return `<div class="mt-1">
+  return `<div class="mt-1.5">
     <div class="w-full bg-slate-700 rounded-full h-1.5">
       <div class="bg-yellow-400 h-1.5 rounded-full transition-all duration-500" style="width:${pct}%"></div>
     </div>
