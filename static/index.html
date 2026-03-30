@@ -68,7 +68,6 @@
                 <th class="px-4 py-2 text-left">File</th>
                 <th class="px-4 py-2 text-right w-20">Matches</th>
                 <th class="px-4 py-2 text-right w-32">Updated</th>
-                <th class="px-4 py-2 w-10"></th>
               </tr>
             </thead>
             <tbody id="job-tbody">
@@ -185,26 +184,37 @@ let queuePositions = {};
 
 async function loadJobs() {
   try {
-    const [jobsRes, posRes] = await Promise.all([
-      fetch(`${BASE}/jobs`),
-      fetch(`${BASE}/jobs/queue-positions`),
-    ]);
-    const jobs = await jobsRes.json();
-    queuePositions = posRes.ok ? await posRes.json() : {};
-    const filtered = filterByTab(jobs);
-    renderJobs(filtered);
+    let jobs = [];
+    queuePositions = {};
+
+    if (jobFilter === 'queued') {
+      const [pendingRes, processingRes, posRes] = await Promise.all([
+        fetch(`${BASE}/jobs?status=pending`),
+        fetch(`${BASE}/jobs?status=processing`),
+        fetch(`${BASE}/jobs/queue-positions`),
+      ]);
+      const pending = pendingRes.ok ? await pendingRes.json() : [];
+      const processing = processingRes.ok ? await processingRes.json() : [];
+      jobs = [...processing, ...pending];
+      queuePositions = posRes.ok ? await posRes.json() : {};
+    } else if (jobFilter === 'done') {
+      const r = await fetch(`${BASE}/jobs?status=done`);
+      jobs = r.ok ? await r.json() : [];
+    } else if (jobFilter === 'failed') {
+      const r = await fetch(`${BASE}/jobs?status=failed`);
+      jobs = r.ok ? await r.json() : [];
+    } else {
+      // All tab: recent 200 jobs only, no queue-positions lookup
+      const r = await fetch(`${BASE}/jobs`);
+      jobs = r.ok ? await r.json() : [];
+    }
+
+    renderJobs(jobs);
     scheduleJobPoll(jobs);
   } catch {
     document.getElementById('job-tbody').innerHTML =
       '<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">Failed to load jobs</td></tr>';
   }
-}
-
-function filterByTab(jobs) {
-  if (jobFilter === 'queued') return jobs.filter(j => j.status === 'pending' || j.status === 'processing');
-  if (jobFilter === 'done')   return jobs.filter(j => j.status === 'done');
-  if (jobFilter === 'failed') return jobs.filter(j => j.status === 'failed');
-  return jobs;
 }
 
 function scheduleJobPoll(jobs) {
@@ -226,16 +236,16 @@ function renderJobs(jobs) {
     const file = j.file_path.split('/').pop() || j.file_path;
     const matches = j.matches ? JSON.parse(j.matches).length : (j.status === 'done' ? 0 : '—');
     const time = relativeTime(j.updated_at);
+    const bar = j.status === 'processing' ? progressBar(j.progress || 0) : '';
     return `<tr class="border-b border-slate-700/50 hover:bg-slate-700/40 cursor-pointer transition ${isSelected ? 'selected' : ''}"
                onclick="showDetail('${j.job_id}')">
       <td class="px-4 py-2">${badge}</td>
-      <td class="px-4 py-2 mono text-xs text-slate-300 max-w-xs truncate" title="${escHtml(j.file_path)}">${escHtml(file)}</td>
+      <td class="px-4 py-2 mono text-xs text-slate-300 max-w-xs">
+        <div class="truncate" title="${escHtml(j.file_path)}">${escHtml(file)}</div>
+        ${bar}
+      </td>
       <td class="px-4 py-2 text-right mono text-slate-400">${matches}</td>
       <td class="px-4 py-2 text-right text-slate-500 text-xs">${time}</td>
-      <td class="px-4 py-2 text-center">
-        <button onclick="event.stopPropagation(); deleteJob('${j.job_id}')"
-          class="text-slate-600 hover:text-red-400 transition text-base leading-none" title="Delete">&times;</button>
-      </td>
     </tr>`;
   }).join('');
 }
@@ -311,12 +321,16 @@ function renderDetail(job) {
   const errorHtml = job.error_msg
     ? `<div class="mt-4 bg-red-950 border border-red-800 rounded p-3 text-sm text-red-300 mono">${escHtml(job.error_msg)}</div>` : '';
 
+  const detailBar = job.status === 'processing'
+    ? `<div class="mt-2">${progressBar(job.progress || 0)}</div>` : '';
+
   document.getElementById('detail-content').innerHTML = `
     <div class="mb-3">
       <p class="text-xs text-slate-500 mono truncate">${escHtml(job.file_path)}</p>
-      <div class="flex items-center gap-3 mt-1">${statusBadge(job.status)}
+      <div class="flex items-center gap-3 mt-1">${statusBadge(job.status, job.priority)}
         <span class="text-xs text-slate-500">ID: <span class="mono">${job.job_id}</span></span>
       </div>
+      ${detailBar}
     </div>
     ${errorHtml}
     <div class="mt-4">
@@ -486,6 +500,16 @@ async function removeWord(word) {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+function progressBar(pct) {
+  const label = pct < 90 ? `Transcribing ${pct}%` : pct < 100 ? `Muting audio…` : `Done`;
+  return `<div class="mt-1">
+    <div class="w-full bg-slate-700 rounded-full h-1.5">
+      <div class="bg-yellow-400 h-1.5 rounded-full transition-all duration-500" style="width:${pct}%"></div>
+    </div>
+    <span class="text-slate-500 text-xs">${label}</span>
+  </div>`;
+}
+
 function fmtTime(secs) {
   if (secs == null) return '?';
   const m = Math.floor(secs / 60);

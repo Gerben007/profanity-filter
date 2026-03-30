@@ -42,6 +42,10 @@ async def init_db(db_path: str) -> None:
             await conn.execute("ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 1")
         except Exception:
             pass  # column already exists
+        try:
+            await conn.execute("ALTER TABLE jobs ADD COLUMN progress INTEGER NOT NULL DEFAULT 0")
+        except Exception:
+            pass  # column already exists
         await conn.commit()
 
 
@@ -50,11 +54,20 @@ async def create_job(db_path: str, file_path: str, priority: int = 1) -> str:
     now = _now()
     async with _connect(db_path) as conn:
         await conn.execute(
-            "INSERT INTO jobs (job_id, file_path, status, priority, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?, ?)",
+            "INSERT INTO jobs (job_id, file_path, status, priority, progress, created_at, updated_at) VALUES (?, ?, 'pending', ?, 0, ?, ?)",
             (job_id, file_path, priority, now, now),
         )
         await conn.commit()
     return job_id
+
+
+async def update_progress(db_path: str, job_id: str, progress: int) -> None:
+    async with _connect(db_path) as conn:
+        await conn.execute(
+            "UPDATE jobs SET progress=?, updated_at=? WHERE job_id=?",
+            (progress, _now(), job_id),
+        )
+        await conn.commit()
 
 
 async def update_job(
@@ -99,12 +112,20 @@ async def get_job(db_path: str, job_id: str) -> dict | None:
     return _deserialize(dict(row))
 
 
-async def list_jobs(db_path: str, limit: int = 200) -> list[dict]:
+async def list_jobs(db_path: str, limit: int = 200, status: str | None = None) -> list[dict]:
     async with _connect(db_path) as conn:
         conn.row_factory = aiosqlite.Row
-        async with conn.execute(
-            "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
-        ) as cur:
+        if status in ("pending", "processing"):
+            # Order by what's next in the priority queue
+            sql = "SELECT * FROM jobs WHERE status=? ORDER BY priority ASC, created_at ASC LIMIT ?"
+            params = (status, limit)
+        elif status:
+            sql = "SELECT * FROM jobs WHERE status=? ORDER BY created_at DESC LIMIT ?"
+            params = (status, limit)
+        else:
+            sql = "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?"
+            params = (limit,)
+        async with conn.execute(sql, params) as cur:
             rows = await cur.fetchall()
     return [_deserialize(dict(r)) for r in rows]
 

@@ -44,10 +44,19 @@ async def run_worker(
         if job_id is None:
             job_id = await db.create_job(db_path, file_path)
         await db.update_job(db_path, job_id, status="processing")
+        await db.update_progress(db_path, job_id, 0)
+
+        loop = asyncio.get_running_loop()
+
+        def progress_cb(pct: int):
+            asyncio.run_coroutine_threadsafe(
+                db.update_progress(db_path, job_id, pct), loop
+            )
 
         try:
             hits, segments = await asyncio.to_thread(
-                transcriber.transcribe, model, file_path, pattern, padding
+                transcriber.transcribe, model, file_path, pattern, padding,
+                progress_cb,
             )
             logger.info(
                 "Transcription done: %d hit(s), %d mute segment(s)",
@@ -55,6 +64,7 @@ async def run_worker(
                 len(segments),
             )
 
+            await db.update_progress(db_path, job_id, 95)
             await asyncio.to_thread(
                 processor.mute_file, file_path, segments, ffmpeg_bin
             )
@@ -63,6 +73,7 @@ async def run_worker(
                 {"word": h.word, "raw": h.raw, "start": h.start, "end": h.end}
                 for h in hits
             ]
+            await db.update_progress(db_path, job_id, 100)
             await db.update_job(
                 db_path, job_id, status="done", matches=matches, segments=segments
             )

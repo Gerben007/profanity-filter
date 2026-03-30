@@ -43,6 +43,7 @@ def transcribe(
     file_path: str,
     pattern: re.Pattern,
     padding: float = 0.1,
+    progress_cb=None,  # optional callable(pct: int) called during transcription
 ) -> tuple[list[WordHit], list[tuple[float, float]]]:
     """
     Transcribe *file_path* and return every word/phrase that matches *pattern*,
@@ -51,15 +52,22 @@ def transcribe(
     Uses a sliding window so multi-word phrases (e.g. "oh my god") are caught
     in addition to single bad words.
     """
-    segments_gen, _info = model.transcribe(
+    segments_gen, info = model.transcribe(
         file_path,
         word_timestamps=True,
         language="en",
     )
+    total_duration = info.duration or 1.0
 
     # Collect all words as (cleaned_text, raw_text, start, end)
     all_words: list[tuple[str, str, float, float]] = []
-    for segment in list(segments_gen):
+    last_reported = -1
+    for segment in segments_gen:
+        if progress_cb and total_duration:
+            pct = min(int(segment.end / total_duration * 90), 90)
+            if pct != last_reported:
+                progress_cb(pct)
+                last_reported = pct
         if segment.words is None:
             continue
         for word_obj in segment.words:

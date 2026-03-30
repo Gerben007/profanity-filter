@@ -222,8 +222,8 @@ async def health():
 
 
 @app.get("/jobs")
-async def list_jobs():
-    return await db.list_jobs(DB_PATH)
+async def list_jobs(status: str | None = None):
+    return await db.list_jobs(DB_PATH, status=status)
 
 
 @app.get("/jobs/queue-positions")
