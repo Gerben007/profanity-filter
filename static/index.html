@@ -181,10 +181,16 @@ function setJobFilter(f) {
   loadJobs();
 }
 
+let queuePositions = {};
+
 async function loadJobs() {
   try {
-    const r = await fetch(`${BASE}/jobs`);
-    const jobs = await r.json();
+    const [jobsRes, posRes] = await Promise.all([
+      fetch(`${BASE}/jobs`),
+      fetch(`${BASE}/jobs/queue-positions`),
+    ]);
+    const jobs = await jobsRes.json();
+    queuePositions = posRes.ok ? await posRes.json() : {};
     const filtered = filterByTab(jobs);
     renderJobs(filtered);
     scheduleJobPoll(jobs);
@@ -215,7 +221,8 @@ function renderJobs(jobs) {
   }
   tbody.innerHTML = jobs.map(j => {
     const isSelected = j.job_id === selectedJobId;
-    const badge = statusBadge(j.status);
+    const pos = queuePositions[j.job_id];
+    const badge = statusBadge(j.status, j.priority, pos);
     const file = j.file_path.split('/').pop() || j.file_path;
     const matches = j.matches ? JSON.parse(j.matches).length : (j.status === 'done' ? 0 : '—');
     const time = relativeTime(j.updated_at);
@@ -233,7 +240,7 @@ function renderJobs(jobs) {
   }).join('');
 }
 
-function statusBadge(status) {
+function statusBadge(status, priority, queuePos) {
   const map = {
     pending:    'bg-slate-700 text-slate-300',
     processing: 'bg-yellow-900 text-yellow-300',
@@ -242,8 +249,15 @@ function statusBadge(status) {
   };
   const icons = { pending: '⏳', processing: '⟳', done: '✓', failed: '✗' };
   const cls = map[status] || 'bg-slate-700 text-slate-300';
+  let extra = '';
+  if (status === 'pending' && queuePos != null) {
+    extra = `<span class="ml-1 text-slate-400">#${queuePos}</span>`;
+  }
+  if (status === 'pending' && priority === 0) {
+    extra += `<span class="ml-1 px-1 rounded bg-orange-800 text-orange-300 text-xs">HIGH</span>`;
+  }
   return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cls}">
-    ${icons[status] || ''} ${status}
+    ${icons[status] || ''} ${status}${extra}
   </span>`;
 }
 

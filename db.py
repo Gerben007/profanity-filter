@@ -26,6 +26,7 @@ async def init_db(db_path: str) -> None:
                 job_id     TEXT PRIMARY KEY,
                 file_path  TEXT NOT NULL,
                 status     TEXT NOT NULL DEFAULT 'pending',
+                priority   INTEGER NOT NULL DEFAULT 1,
                 error_msg  TEXT,
                 matches    TEXT,
                 segments   TEXT,
@@ -33,16 +34,24 @@ async def init_db(db_path: str) -> None:
                 updated_at TEXT NOT NULL
             )
         """)
+        # Migrate existing DB: add priority column if missing
+        await conn.execute("""
+            ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 1
+        """).close() if False else None
+        try:
+            await conn.execute("ALTER TABLE jobs ADD COLUMN priority INTEGER NOT NULL DEFAULT 1")
+        except Exception:
+            pass  # column already exists
         await conn.commit()
 
 
-async def create_job(db_path: str, file_path: str) -> str:
+async def create_job(db_path: str, file_path: str, priority: int = 1) -> str:
     job_id = str(uuid.uuid4())
     now = _now()
     async with _connect(db_path) as conn:
         await conn.execute(
-            "INSERT INTO jobs (job_id, file_path, status, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?)",
-            (job_id, file_path, now, now),
+            "INSERT INTO jobs (job_id, file_path, status, priority, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?, ?)",
+            (job_id, file_path, priority, now, now),
         )
         await conn.commit()
     return job_id
@@ -98,6 +107,17 @@ async def list_jobs(db_path: str, limit: int = 200) -> list[dict]:
         ) as cur:
             rows = await cur.fetchall()
     return [_deserialize(dict(r)) for r in rows]
+
+
+async def get_queue_positions(db_path: str) -> dict[str, int]:
+    """Return {job_id: position} for all pending jobs, ordered by priority then created_at."""
+    async with _connect(db_path) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute(
+            "SELECT job_id FROM jobs WHERE status='pending' ORDER BY priority ASC, created_at ASC"
+        ) as cur:
+            rows = await cur.fetchall()
+    return {dict(r)["job_id"]: i + 1 for i, r in enumerate(rows)}
 
 
 async def delete_job(db_path: str, job_id: str) -> bool:

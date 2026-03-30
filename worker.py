@@ -30,8 +30,11 @@ async def run_worker(
     logger.info("Worker started.")
     while True:
         item = await queue.get()
-        # Support both bare strings (legacy / stale-job recovery) and tuples
-        if isinstance(item, tuple):
+        # Queue items: (priority, file_path, job_id | None)
+        # Legacy bare strings are also handled for stale-job recovery.
+        if isinstance(item, tuple) and len(item) == 3:
+            _priority, file_path, job_id = item
+        elif isinstance(item, tuple) and len(item) == 2:
             file_path, job_id = item
         else:
             file_path, job_id = item, None

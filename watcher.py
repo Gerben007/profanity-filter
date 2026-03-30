@@ -83,7 +83,7 @@ def _wait_for_stable(
             stable_since = now
         elif now - stable_since >= STABILITY_DURATION:
             logger.info("File stable, enqueueing: %s", path)
-            loop.call_soon_threadsafe(queue.put_nowait, path)
+            loop.call_soon_threadsafe(queue.put_nowait, (1, path, None))
             return
 
         time.sleep(STABILITY_POLL_INTERVAL)

@@ -69,7 +69,7 @@ async def _scan_existing(watch_folder: str, queue: asyncio.Queue) -> None:
             continue
         str_path = str(path)
         if str_path not in processed:
-            queue.put_nowait(str_path)
+            queue.put_nowait((1, str_path, None))
             found += 1
 
     if found:
@@ -104,8 +104,8 @@ async def lifespan(app: FastAPI):
     pattern = build_pattern(words)
     logger.info("Loaded %d bad words.", len(words))
 
-    # 4. Job queue
-    queue: asyncio.Queue = asyncio.Queue()
+    # 4. Job queue (priority queue: lower number = processed first)
+    queue: asyncio.PriorityQueue = asyncio.PriorityQueue()
 
     # 5. Start watchdog first so watch_handler exists before the worker starts
     loop = asyncio.get_running_loop()
@@ -122,7 +122,7 @@ async def lifespan(app: FastAPI):
     if stale_paths:
         logger.info("Re-enqueueing %d stale job(s).", len(stale_paths))
         for path in stale_paths:
-            queue.put_nowait(path)
+            queue.put_nowait((1, path, None))
 
     # 8. Scan watch folder for existing files that have never been processed
     await _scan_existing(WATCH_FOLDER, queue)
@@ -226,6 +226,11 @@ async def list_jobs():
     return await db.list_jobs(DB_PATH)
 
 
+@app.get("/jobs/queue-positions")
+async def queue_positions():
+    return await db.get_queue_positions(DB_PATH)
+
+
 @app.get("/jobs/{job_id}")
 async def get_job(job_id: str):
     job = await db.get_job(DB_PATH, job_id)
@@ -239,12 +244,10 @@ async def submit_job(body: SubmitJobRequest):
     path = body.file_path
     if not Path(path).is_file():
         raise HTTPException(status_code=400, detail=f"File not found: {path}")
-    # Create the DB record first so the caller has an ID to poll immediately.
-    # Pass the id along in the queue so the worker reuses it instead of
-    # creating a duplicate.
-    job_id = await db.create_job(DB_PATH, path)
-    queue: asyncio.Queue = _state["queue"]
-    queue.put_nowait((path, job_id))
+    # Priority 0 = high (processed next); watcher/scan jobs use priority 1.
+    job_id = await db.create_job(DB_PATH, path, priority=0)
+    queue: asyncio.PriorityQueue = _state["queue"]
+    queue.put_nowait((0, path, job_id))
     return SubmitJobResponse(job_id=job_id, file_path=path)
 
 
