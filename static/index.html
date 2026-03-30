@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Profanity Filter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background: #0f172a; }
+    .mono { font-family: ui-monospace, monospace; }
+    tr.selected { background: #1e3a5f !important; }
+  </style>
+</head>
+<body class="text-slate-200 min-h-screen">
+
+  <!-- Header -->
+  <header class="bg-slate-800 border-b border-slate-700 px-6 py-3 flex items-center justify-between">
+    <h1 class="text-lg font-semibold tracking-wide">Profanity Filter</h1>
+    <div class="flex items-center gap-3">
+      <span id="health-chip" class="text-xs px-3 py-1 rounded-full bg-slate-700 text-slate-400 mono">loading…</span>
+      <button onclick="reloadWords()" class="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 transition">Reload Words</button>
+    </div>
+  </header>
+
+  <main class="max-w-5xl mx-auto px-4 py-6 space-y-6">
+
+    <!-- Submit job -->
+    <section class="bg-slate-800 rounded-xl p-5 border border-slate-700">
+      <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3">Submit Job</h2>
+      <div class="flex gap-2">
+        <input id="file-path" type="text" placeholder="/media/video.mp4"
+          class="flex-1 bg-slate-900 border border-slate-600 rounded px-3 py-2 text-sm mono text-slate-200 placeholder-slate-500 focus:outline-none focus:border-blue-500"
+          onkeydown="if(event.key==='Enter') submitJob()" />
+        <button onclick="submitJob()"
+          class="px-5 py-2 bg-blue-600 hover:bg-blue-500 rounded text-sm font-medium transition">
+          Process
+        </button>
+      </div>
+      <p id="submit-msg" class="text-xs mt-2 h-4"></p>
+    </section>
+
+    <!-- Job list -->
+    <section class="bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+      <div class="flex items-center justify-between px-5 py-3 border-b border-slate-700">
+        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Jobs</h2>
+        <button onclick="loadJobs()" class="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 transition">Refresh</button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-slate-500 text-xs uppercase border-b border-slate-700">
+              <th class="px-4 py-2 text-left w-28">Status</th>
+              <th class="px-4 py-2 text-left">File</th>
+              <th class="px-4 py-2 text-right w-20">Matches</th>
+              <th class="px-4 py-2 text-right w-32">Updated</th>
+              <th class="px-4 py-2 w-10"></th>
+            </tr>
+          </thead>
+          <tbody id="job-tbody">
+            <tr><td colspan="5" class="px-4 py-6 text-center text-slate-500">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Detail panel -->
+    <section id="detail-panel" class="hidden bg-slate-800 rounded-xl border border-slate-700 p-5">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-sm font-semibold text-slate-400 uppercase tracking-wider">Job Detail</h2>
+        <button onclick="closeDetail()" class="text-slate-500 hover:text-slate-300 text-lg leading-none">&times;</button>
+      </div>
+      <div id="detail-content"></div>
+    </section>
+
+  </main>
+
+<script>
+const BASE = '';
+let selectedJobId = null;
+let pollTimer = null;
+
+// ── Health ──────────────────────────────────────────────────────────────────
+async function loadHealth() {
+  try {
+    const r = await fetch(`${BASE}/health`);
+    const d = await r.json();
+    const chip = document.getElementById('health-chip');
+    const alive = d.worker_alive;
+    chip.textContent = `${alive ? '✓' : '✗'} Worker  |  Queue: ${d.queue_depth}  |  Words: ${d.word_count}`;
+    chip.className = `text-xs px-3 py-1 rounded-full mono ${alive ? 'bg-emerald-900 text-emerald-300' : 'bg-red-900 text-red-300'}`;
+  } catch {
+    const chip = document.getElementById('health-chip');
+    chip.textContent = 'unreachable';
+    chip.className = 'text-xs px-3 py-1 rounded-full mono bg-red-900 text-red-300';
+  }
+}
+
+// ── Jobs ────────────────────────────────────────────────────────────────────
+async function loadJobs() {
+  try {
+    const r = await fetch(`${BASE}/jobs`);
+    const jobs = await r.json();
+    renderJobs(jobs);
+    scheduleJobPoll(jobs);
+  } catch {
+    document.getElementById('job-tbody').innerHTML =
+      '<tr><td colspan="5" class="px-4 py-6 text-center text-red-400">Failed to load jobs</td></tr>';
+  }
+}
+
+function scheduleJobPoll(jobs) {
+  clearTimeout(pollTimer);
+  const hasActive = jobs.some(j => j.status === 'pending' || j.status === 'processing');
+  pollTimer = setTimeout(loadJobs, hasActive ? 2000 : 5000);
+}
+
+function renderJobs(jobs) {
+  const tbody = document.getElementById('job-tbody');
+  if (!jobs.length) {
+    tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-slate-500">No jobs yet</td></tr>';
+    return;
+  }
+  tbody.innerHTML = jobs.map(j => {
+    const isSelected = j.job_id === selectedJobId;
+    const badge = statusBadge(j.status);
+    const file = j.file_path.split('/').pop() || j.file_path;
+    const matches = j.matches ? JSON.parse(j.matches).length : (j.status === 'done' ? 0 : '—');
+    const time = relativeTime(j.updated_at);
+    return `<tr class="border-b border-slate-700/50 hover:bg-slate-700/40 cursor-pointer transition ${isSelected ? 'selected' : ''}"
+               onclick="showDetail('${j.job_id}')">
+      <td class="px-4 py-2">${badge}</td>
+      <td class="px-4 py-2 mono text-xs text-slate-300 max-w-xs truncate" title="${j.file_path}">${file}</td>
+      <td class="px-4 py-2 text-right mono text-slate-400">${matches}</td>
+      <td class="px-4 py-2 text-right text-slate-500 text-xs">${time}</td>
+      <td class="px-4 py-2 text-center">
+        <button onclick="event.stopPropagation(); deleteJob('${j.job_id}')"
+          class="text-slate-600 hover:text-red-400 transition text-base leading-none" title="Delete">&times;</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function statusBadge(status) {
+  const map = {
+    pending:    'bg-slate-700 text-slate-300',
+    processing: 'bg-yellow-900 text-yellow-300',
+    done:       'bg-emerald-900 text-emerald-300',
+    failed:     'bg-red-900 text-red-300',
+  };
+  const icons = { pending: '⏳', processing: '⟳', done: '✓', failed: '✗' };
+  const cls = map[status] || 'bg-slate-700 text-slate-300';
+  return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${cls}">
+    ${icons[status] || ''} ${status}
+  </span>`;
+}
+
+function relativeTime(iso) {
+  if (!iso) return '—';
+  const diff = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (diff < 60) return `${Math.round(diff)}s ago`;
+  if (diff < 3600) return `${Math.round(diff / 60)}m ago`;
+  return `${Math.round(diff / 3600)}h ago`;
+}
+
+// ── Detail ───────────────────────────────────────────────────────────────────
+async function showDetail(jobId) {
+  selectedJobId = jobId;
+  // Refresh row highlighting
+  document.querySelectorAll('#job-tbody tr').forEach(tr => tr.classList.remove('selected'));
+  event.currentTarget && event.currentTarget.classList.add('selected');
+
+  const panel = document.getElementById('detail-panel');
+  const content = document.getElementById('detail-content');
+  panel.classList.remove('hidden');
+  content.innerHTML = '<p class="text-slate-500 text-sm">Loading…</p>';
+
+  try {
+    const r = await fetch(`${BASE}/jobs/${jobId}`);
+    if (!r.ok) throw new Error('Not found');
+    const job = await r.json();
+    renderDetail(job);
+  } catch {
+    content.innerHTML = '<p class="text-red-400 text-sm">Failed to load job detail.</p>';
+  }
+}
+
+function renderDetail(job) {
+  const matches = job.matches ? JSON.parse(job.matches) : [];
+  const segments = job.segments ? JSON.parse(job.segments) : [];
+
+  const matchHtml = matches.length
+    ? `<div class="space-y-1">
+        ${matches.map(m => `
+          <div class="flex items-center gap-3 text-xs mono bg-slate-900 rounded px-3 py-1.5">
+            <span class="text-red-400 font-semibold">${escHtml(m.word)}</span>
+            <span class="text-slate-500">matched</span>
+            <span class="text-slate-300">"${escHtml(m.raw)}"</span>
+            <span class="ml-auto text-slate-500">${fmtTime(m.start)} – ${fmtTime(m.end)}</span>
+          </div>`).join('')}
+      </div>`
+    : '<p class="text-slate-500 text-sm">No matches found.</p>';
+
+  const segHtml = segments.length
+    ? `<div class="flex flex-wrap gap-2 mt-2">
+        ${segments.map(s =>
+          `<span class="text-xs mono bg-slate-900 px-2 py-1 rounded text-slate-300">[${s[0].toFixed(2)}s – ${s[1].toFixed(2)}s]</span>`
+        ).join('')}
+      </div>`
+    : '';
+
+  const errorHtml = job.error_msg
+    ? `<div class="mt-4 bg-red-950 border border-red-800 rounded p-3 text-sm text-red-300 mono">${escHtml(job.error_msg)}</div>`
+    : '';
+
+  document.getElementById('detail-content').innerHTML = `
+    <div class="mb-3">
+      <p class="text-xs text-slate-500 mono truncate">${escHtml(job.file_path)}</p>
+      <div class="flex items-center gap-3 mt-1">${statusBadge(job.status)}
+        <span class="text-xs text-slate-500">ID: <span class="mono">${job.job_id}</span></span>
+      </div>
+    </div>
+    ${errorHtml}
+    <div class="mt-4">
+      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Detected Words (${matches.length})</h3>
+      ${matchHtml}
+    </div>
+    ${segments.length ? `<div class="mt-4">
+      <h3 class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Muted Segments</h3>
+      ${segHtml}
+    </div>` : ''}
+  `;
+}
+
+function closeDetail() {
+  selectedJobId = null;
+  document.getElementById('detail-panel').classList.add('hidden');
+  document.querySelectorAll('#job-tbody tr').forEach(tr => tr.classList.remove('selected'));
+}
+
+// ── Submit ───────────────────────────────────────────────────────────────────
+async function submitJob() {
+  const input = document.getElementById('file-path');
+  const msg = document.getElementById('submit-msg');
+  const path = input.value.trim();
+  if (!path) return;
+
+  msg.textContent = 'Submitting…';
+  msg.className = 'text-xs mt-2 h-4 text-slate-400';
+
+  try {
+    const r = await fetch(`${BASE}/jobs`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_path: path }),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      msg.textContent = d.detail || 'Error submitting job';
+      msg.className = 'text-xs mt-2 h-4 text-red-400';
+    } else {
+      msg.textContent = `Queued: ${d.job_id}`;
+      msg.className = 'text-xs mt-2 h-4 text-emerald-400';
+      input.value = '';
+      await loadJobs();
+    }
+  } catch {
+    msg.textContent = 'Network error';
+    msg.className = 'text-xs mt-2 h-4 text-red-400';
+  }
+}
+
+// ── Delete ───────────────────────────────────────────────────────────────────
+async function deleteJob(jobId) {
+  if (!confirm('Delete this job record?')) return;
+  await fetch(`${BASE}/jobs/${jobId}`, { method: 'DELETE' });
+  if (selectedJobId === jobId) closeDetail();
+  await loadJobs();
+}
+
+// ── Reload words ──────────────────────────────────────────────────────────────
+async function reloadWords() {
+  try {
+    const r = await fetch(`${BASE}/reload`, { method: 'POST' });
+    const d = await r.json();
+    alert(`Word list reloaded: ${d.word_count} words`);
+    loadHealth();
+  } catch {
+    alert('Failed to reload word list');
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function fmtTime(secs) {
+  if (secs == null) return '?';
+  const m = Math.floor(secs / 60);
+  const s = (secs % 60).toFixed(1).padStart(4, '0');
+  return `${m}:${s}`;
+}
+
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+loadHealth();
+loadJobs();
+setInterval(loadHealth, 10000);
+</script>
+</body>
+</html>

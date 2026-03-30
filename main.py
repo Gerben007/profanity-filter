@@ -6,6 +6,8 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 import db
@@ -144,6 +146,15 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="Profanity Audio Muter", version="2.0.0", lifespan=lifespan)
+
+_static_dir = Path(__file__).parent / "static"
+if _static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+
+@app.get("/", include_in_schema=False)
+async def ui():
+    return FileResponse(str(_static_dir / "index.html"))
 
 
 # ---------------------------------------------------------------------------
