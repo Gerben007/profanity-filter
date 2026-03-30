@@ -63,15 +63,18 @@ async def run_worker(
                 len(segments),
             )
 
-            await db.update_progress(db_path, job_id, 95)
-            await asyncio.to_thread(
-                processor.mute_file, file_path, segments, ffmpeg_bin
-            )
-
             matches = [
                 {"word": h.word, "raw": h.raw, "start": h.start, "end": h.end}
                 for h in hits
             ]
+            # Store matches now so UI shows count while muting is in progress
+            await db.update_job(db_path, job_id, status="processing", matches=matches, segments=segments)
+            await db.update_progress(db_path, job_id, 95)
+
+            await asyncio.to_thread(
+                processor.mute_file, file_path, segments, ffmpeg_bin
+            )
+
             await db.update_progress(db_path, job_id, 100)
             await db.update_job(
                 db_path, job_id, status="done", matches=matches, segments=segments

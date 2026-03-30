@@ -267,6 +267,41 @@ async def submit_job(body: SubmitJobRequest):
     return SubmitJobResponse(job_id=job_id, file_path=path)
 
 
+class FolderRequest(BaseModel):
+    folder_path: str
+
+
+@app.post("/jobs/folder", status_code=202)
+async def submit_folder(body: FolderRequest):
+    """Queue all unprocessed media files in a folder (non-recursive) at high priority."""
+    folder = Path(body.folder_path)
+    watch_root = Path(WATCH_FOLDER).resolve()
+    target = folder.resolve()
+    if target != watch_root and watch_root not in target.parents and target not in watch_root.parents:
+        raise HTTPException(status_code=403, detail="Path outside allowed root")
+    if not folder.is_dir():
+        raise HTTPException(status_code=400, detail=f"Not a directory: {body.folder_path}")
+
+    existing = await db.list_jobs(DB_PATH, limit=10000)
+    already_queued = {j["file_path"] for j in existing if j["status"] in ("pending", "processing", "done")}
+
+    queue: asyncio.PriorityQueue = _state["queue"]
+    queued = []
+    for entry in sorted(folder.iterdir(), key=lambda e: e.name.lower()):
+        if entry.suffix.lower() not in MEDIA_EXTENSIONS:
+            continue
+        if entry.name.startswith("tmp"):
+            continue
+        str_path = str(entry)
+        if str_path in already_queued:
+            continue
+        job_id = await db.create_job(DB_PATH, str_path, priority=0)
+        _enqueue(queue, 0, str_path, job_id)
+        queued.append(str_path)
+
+    return {"queued": len(queued), "files": queued}
+
+
 @app.post("/reload", response_model=ReloadResponse)
 async def reload_badwords():
     words = load_words(BADWORDS_PATH)
