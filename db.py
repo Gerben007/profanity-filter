@@ -1,5 +1,6 @@
 import json
 import uuid
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 
 import aiosqlite
@@ -9,16 +10,17 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+@asynccontextmanager
 async def _connect(db_path: str):
     """Open a connection with WAL mode and a generous busy timeout."""
-    conn = await aiosqlite.connect(db_path, timeout=30)
-    await conn.execute("PRAGMA journal_mode=WAL")
-    await conn.execute("PRAGMA busy_timeout=10000")
-    return conn
+    async with aiosqlite.connect(db_path, timeout=30) as conn:
+        await conn.execute("PRAGMA journal_mode=WAL")
+        await conn.execute("PRAGMA busy_timeout=10000")
+        yield conn
 
 
 async def init_db(db_path: str) -> None:
-    async with await _connect(db_path) as conn:
+    async with _connect(db_path) as conn:
         await conn.execute("""
             CREATE TABLE IF NOT EXISTS jobs (
                 job_id     TEXT PRIMARY KEY,
@@ -37,7 +39,7 @@ async def init_db(db_path: str) -> None:
 async def create_job(db_path: str, file_path: str) -> str:
     job_id = str(uuid.uuid4())
     now = _now()
-    async with await _connect(db_path) as conn:
+    async with _connect(db_path) as conn:
         await conn.execute(
             "INSERT INTO jobs (job_id, file_path, status, created_at, updated_at) VALUES (?, ?, 'pending', ?, ?)",
             (job_id, file_path, now, now),
@@ -55,7 +57,7 @@ async def update_job(
     segments: list[tuple[float, float]] | None = None,
 ) -> None:
     now = _now()
-    async with await _connect(db_path) as conn:
+    async with _connect(db_path) as conn:
         await conn.execute(
             """UPDATE jobs SET status=?, error_msg=?, matches=?, segments=?, updated_at=?
                WHERE job_id=?""",
@@ -79,7 +81,7 @@ def _deserialize(row: dict) -> dict:
 
 
 async def get_job(db_path: str, job_id: str) -> dict | None:
-    async with await _connect(db_path) as conn:
+    async with _connect(db_path) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute("SELECT * FROM jobs WHERE job_id=?", (job_id,)) as cur:
             row = await cur.fetchone()
@@ -89,7 +91,7 @@ async def get_job(db_path: str, job_id: str) -> dict | None:
 
 
 async def list_jobs(db_path: str, limit: int = 200) -> list[dict]:
-    async with await _connect(db_path) as conn:
+    async with _connect(db_path) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
@@ -99,7 +101,7 @@ async def list_jobs(db_path: str, limit: int = 200) -> list[dict]:
 
 
 async def delete_job(db_path: str, job_id: str) -> bool:
-    async with await _connect(db_path) as conn:
+    async with _connect(db_path) as conn:
         cur = await conn.execute("DELETE FROM jobs WHERE job_id=?", (job_id,))
         await conn.commit()
     return cur.rowcount > 0
@@ -107,7 +109,7 @@ async def delete_job(db_path: str, job_id: str) -> bool:
 
 async def recover_stale_jobs(db_path: str) -> list[str]:
     """Reset jobs stuck in 'processing' from a previous run and return their file paths."""
-    async with await _connect(db_path) as conn:
+    async with _connect(db_path) as conn:
         conn.row_factory = aiosqlite.Row
         async with conn.execute(
             "SELECT job_id, file_path FROM jobs WHERE status='processing'"
