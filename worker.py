@@ -30,10 +30,9 @@ async def run_worker(
     logger.info("Worker started.")
     while True:
         item = await queue.get()
-        # Queue items: (priority, file_path, job_id | None)
-        # Legacy bare strings are also handled for stale-job recovery.
-        if isinstance(item, tuple) and len(item) == 3:
-            _priority, file_path, job_id = item
+        # Queue items: (priority, seq, file_path, job_id | None)
+        if isinstance(item, tuple) and len(item) == 4:
+            _priority, _seq, file_path, job_id = item
         elif isinstance(item, tuple) and len(item) == 2:
             file_path, job_id = item
         else:
@@ -82,9 +81,8 @@ async def run_worker(
                 mark_processed(file_path)
 
         except asyncio.CancelledError:
-            await db.update_job(
-                db_path, job_id, status="failed", error_msg="Worker cancelled"
-            )
+            # Reset to pending so recover_stale_jobs re-queues it on next start
+            await db.update_job(db_path, job_id, status="pending")
             raise
 
         except Exception as exc:

@@ -21,6 +21,15 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Suppress noisy access log entries for high-frequency polling endpoints
+class _SuppressPolling(logging.Filter):
+    _SKIP = ("/health", "/jobs?status=", "/jobs/queue-positions")
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(s in msg for s in self._SKIP)
+
+logging.getLogger("uvicorn.access").addFilter(_SuppressPolling())
+
 # ---------------------------------------------------------------------------
 # Config (all overridable via environment variables)
 # ---------------------------------------------------------------------------
@@ -69,7 +78,7 @@ async def _scan_existing(watch_folder: str, queue: asyncio.Queue) -> None:
             continue
         str_path = str(path)
         if str_path not in processed:
-            queue.put_nowait((1, str_path, None))
+            _enqueue(queue, 1, str_path, None)
             found += 1
 
     if found:
@@ -82,6 +91,13 @@ async def _scan_existing(watch_folder: str, queue: asyncio.Queue) -> None:
 # App state
 # ---------------------------------------------------------------------------
 _state: dict = {}
+_enqueue_counter = 0  # monotonic tiebreaker so PriorityQueue never compares job_id/None
+
+
+def _enqueue(queue: asyncio.PriorityQueue, priority: int, path: str, job_id) -> None:
+    global _enqueue_counter
+    _enqueue_counter += 1
+    queue.put_nowait((priority, _enqueue_counter, path, job_id))
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +138,7 @@ async def lifespan(app: FastAPI):
     if stale_paths:
         logger.info("Re-enqueueing %d stale job(s).", len(stale_paths))
         for path in stale_paths:
-            queue.put_nowait((1, path, None))
+            _enqueue(queue, 1, path, None)
 
     # 8. Scan watch folder for existing files that have never been processed
     await _scan_existing(WATCH_FOLDER, queue)
@@ -247,7 +263,7 @@ async def submit_job(body: SubmitJobRequest):
     # Priority 0 = high (processed next); watcher/scan jobs use priority 1.
     job_id = await db.create_job(DB_PATH, path, priority=0)
     queue: asyncio.PriorityQueue = _state["queue"]
-    queue.put_nowait((0, path, job_id))
+    _enqueue(queue, 0, path, job_id)
     return SubmitJobResponse(job_id=job_id, file_path=path)
 
 
